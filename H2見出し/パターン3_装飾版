@@ -1,0 +1,50 @@
+<!-- wp:swell/box {"boxType":"good","bgColor":"#f0fdf4","borderColor":"#16a34a"} -->
+<div class="swell-block-box good" style="background-color:#f0fdf4;border-color:#16a34a;">
+<div class="box__title">「タイトル」は「raw」や「shikotch」などの違法サイトではなく、正規の方法で読もう！</div>
+<div class="box__body">
+<p>本記事は、漫画業界やクリエイターを支援する目的で作成しており、違法サイトの利用を助長するものではありません。</p>
+
+<p>漫画家や出版社は、作品を制作するために多くの時間とコストをかけています。</p>
+
+<p>しかし、「raw」や「shikotch」などの違法サイトで漫画が無料で読まれると、クリエイターに1円も利益が入りません。</p>
+</div>
+</div>
+<!-- /wp:swell/box -->
+
+<!-- wp:swell/accordion -->
+<details class="swell-block-accordion">
+<summary class="accordion__title">海賊版サイトが漫画業界に与える影響</summary>
+<div class="accordion__body">
+<!-- wp:swell/list {"icon":"times","iconColor":"#ef4444"} -->
+<ul class="swell-block-list has-icon" style="--icon-color:#ef4444;">
+<li>❌作者に収益が入らない → 作品の続編が打ち切りに！</li>
+<li>❌出版社の売上減 → 漫画業界全体が衰退</li>
+<li>❌ファンの応援が届かず、クリエイターが創作を続けられなくなる</li>
+</ul>
+<!-- /wp:swell/list -->
+
+<!-- wp:paragraph -->
+<p>「好きな作品をもっと読みたい！」と思うなら、正規の配信サイトで応援することが何より大切です！</p>
+<!-- /wp:paragraph -->
+</div>
+</details>
+<!-- /wp:swell/accordion -->
+
+<!-- wp:swell/box {"boxType":"point","bgColor":"#fefce8","borderColor":"#eab308"} -->
+<div class="swell-block-box point" style="background-color:#fefce8;border-color:#eab308;">
+<div class="box__title">📌 クリエイターを支援しながら漫画を楽しもう！</div>
+<div class="box__body">
+<p>本記事で紹介している作品は、正規の配信サイトで安全に読むことができます。</p>
+
+<p><strong>✨ クリエイターを支援しながら漫画を楽しもう！</strong></p>
+</div>
+</div>
+<!-- /wp:swell/box -->
+
+<!-- wp:swell/button {"align":"center","size":"l","color":"green","url":"#affiliate-link","text":"公式の販売サイトで応援しよう"} -->
+<div class="wp-block-swell-button aligncenter">
+<a href="#affiliate-link" class="swell-block-button green_ size-l">
+<span>公式の販売サイトで応援しよう</span>
+</a>
+</div>
+<!-- /wp:swell/button -->

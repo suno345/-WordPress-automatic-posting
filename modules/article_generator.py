@@ -17,7 +17,11 @@ class ArticleGenerator:
         try:
             # パターン1-3からランダムに選択
             pattern_num = random.randint(1, 3)
-            pattern_file = os.path.join(self.h2_patterns_dir, f'パターン{pattern_num}')
+            # 装飾版を優先的に選択
+            decorated_pattern_file = os.path.join(self.h2_patterns_dir, f'パターン{pattern_num}_装飾版')
+            standard_pattern_file = os.path.join(self.h2_patterns_dir, f'パターン{pattern_num}')
+            
+            pattern_file = decorated_pattern_file if os.path.exists(decorated_pattern_file) else standard_pattern_file
             
             if os.path.exists(pattern_file):
                 with open(pattern_file, 'r', encoding='utf-8') as f:

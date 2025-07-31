@@ -41,7 +41,11 @@ class H2PatternManager:
         patterns = []
         
         for i in range(1, 4):  # パターン1-3
-            pattern_file = self.patterns_dir / f'パターン{i}'
+            # 装飾版を優先的に読み込み
+            decorated_pattern_file = self.patterns_dir / f'パターン{i}_装飾版'
+            standard_pattern_file = self.patterns_dir / f'パターン{i}'
+            
+            pattern_file = decorated_pattern_file if decorated_pattern_file.exists() else standard_pattern_file
             
             try:
                 if pattern_file.exists():
@@ -65,21 +69,27 @@ class H2PatternManager:
         
         return patterns
     
-    def get_random_pattern(self, work_title: str) -> str:
+    def get_random_pattern(self, work_title: str, affiliate_url: str = '') -> str:
         """
-        ランダムなH2パターンを取得し、タイトルを置換
+        ランダムなH2パターンを取得し、タイトルとアフィリエイトURLを置換
         
         Args:
             work_title: 作品タイトル
+            affiliate_url: アフィリエイトURL
         
         Returns:
-            タイトルが置換されたH2パターン
+            タイトルとURLが置換されたH2パターン
         """
         if not self._patterns:
             return DefaultValues.FALLBACK_H2_HEADINGS[0]
         
         pattern = random.choice(self._patterns)
-        return pattern.replace('「タイトル」', f'「{work_title}」')
+        
+        # タイトルとアフィリエイトURLを置換
+        pattern = pattern.replace('「タイトル」', f'「{work_title}」')
+        pattern = pattern.replace('#affiliate-link', affiliate_url or '#')
+        
+        return pattern
     
     def reload_patterns(self) -> int:
         """
@@ -239,7 +249,8 @@ class ArticleGenerator:
     def _generate_h2_section(self, work_data: Dict) -> List[str]:
         """H2見出しセクションを生成"""
         title = work_data.get('title', '')
-        h2_content = self.h2_manager.get_random_pattern(title)
+        affiliate_url = work_data.get('affiliate_url', '')
+        h2_content = self.h2_manager.get_random_pattern(title, affiliate_url)
         
         return [h2_content]
     

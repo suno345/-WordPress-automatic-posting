@@ -1,0 +1,43 @@
+<!-- wp:swell/alert-box {"style":"warning","bgColor":"#fffbeb","borderColor":"#f59e0b","titleColor":"#d97706"} -->
+<div class="swell-block-alert warning" style="background-color:#fffbeb;border-color:#f59e0b;">
+<div class="alert__title" style="color:#d97706;">
+<span class="alert__icon"></span>
+「タイトル」を「momon:GA」や「hentai」などの違法サイトで読むのは超危険！
+</div>
+<div class="alert__body">
+<p>本記事では、違法サイトのセキュリティリスクや個人情報漏洩の危険性を伝える目的で作成しており、rawやhitomiなどの海賊版サイトを推奨するものではありません。</p>
+
+<p>「momon:GA」や「hentai」などの海賊版サイトには、ウイルス感染や個人情報の流出リスクがあることをご存知ですか？</p>
+
+<h4>違法サイトを使うとこんな危険が！</h4>
+</div>
+</div>
+<!-- /wp:swell/alert-box -->
+
+<!-- wp:swell/list {"icon":"times","iconColor":"#ef4444"} -->
+<ul class="swell-block-list has-icon" style="--icon-color:#ef4444;">
+<li>❌ウイルス感染 → PCやスマホが乗っ取られ、データが消える可能性</li>
+<li>❌フィッシング詐欺 → クレジットカード情報や個人データを盗まれる</li>
+<li>❌架空請求詐欺 → 「違法ダウンロードしました」と脅迫され、高額請求を受ける</li>
+</ul>
+<!-- /wp:swell/list -->
+
+<!-- wp:swell/box {"boxType":"info","bgColor":"#eff6ff","borderColor":"#3b82f6"} -->
+<div class="swell-block-box info" style="background-color:#eff6ff;border-color:#3b82f6;">
+<div class="box__title">📌 公式サイトなら安全＆快適！</div>
+<div class="box__body">
+<p>公式の電子書籍サービスなら、ウイルスの心配なしで快適に読めます！<br>
+当サイトで紹介している作品は、すべて正規の配信サービスで販売されているものです。</p>
+
+<p><strong>🛡 安全に読むなら公式サイトを利用しよう！</strong></p>
+</div>
+</div>
+<!-- /wp:swell/box -->
+
+<!-- wp:swell/button {"align":"center","size":"l","color":"blue","url":"#affiliate-link","text":"安全に読める公式サイトはココをクリック"} -->
+<div class="wp-block-swell-button aligncenter">
+<a href="#affiliate-link" class="swell-block-button blue_ size-l">
+<span>安全に読める公式サイトはココをクリック</span>
+</a>
+</div>
+<!-- /wp:swell/button -->

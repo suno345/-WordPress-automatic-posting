@@ -1,0 +1,43 @@
+<!-- wp:swell/alert-box {"style":"alert","bgColor":"#fef2f2","borderColor":"#fca5a5","titleColor":"#dc2626"} -->
+<div class="swell-block-alert alert" style="background-color:#fef2f2;border-color:#fca5a5;">
+<div class="alert__title" style="color:#dc2626;">
+<span class="alert__icon"></span>
+「タイトル」をrawやhitomiといった違法サイトで読むのは犯罪リスクあり！
+</div>
+<div class="alert__body">
+<p>※本記事では、違法サイトの危険性について注意喚起を行っており、rawやhitomiといった海賊版サイトの利用を推奨するものではありません。</p>
+
+<p>rawやhitomiなどの違法サイトを利用することは、著作権法違反に該当する可能性があります。<br>
+違法サイトの利用は、単なる閲覧でも法的リスクを伴い、ダウンロードを行えば刑事罰の対象となります。</p>
+
+<div class="risk-list">
+<h4>・法律上のリスク</h4>
+<ul>
+<li>✅ 著作権法違反（刑事罰の可能性あり）</li>
+<li>✅ 2年以下の懲役 or 200万円以下の罰金、またはその両方が科せられる</li>
+<li>✅ 過去に違法ダウンロードで摘発された事例もあり、取り締まりが強化されている</li>
+</ul>
+<p>参考：政府広報オンライン</p>
+</div>
+</div>
+</div>
+<!-- /wp:swell/alert-box -->
+
+<!-- wp:swell/box {"boxType":"success","bgColor":"#f0fdf4","borderColor":"#22c55e"} -->
+<div class="swell-block-box success" style="background-color:#f0fdf4;border-color:#22c55e;">
+<div class="box__title">📌 公式サイトで安全に読もう！</div>
+<div class="box__body">
+<p>本記事で使用している画像は、<br>
+DLsite・FANZAブックスなど正規配信サイトのサンプル画像のみを引用しており、違法サイトとは一切関係ありません。<br>
+当サイトを利用することで作者やサークルの方々に不利益を被ることは一切ございませんので安心してご利用ください。</p>
+</div>
+</div>
+<!-- /wp:swell/box -->
+
+<!-- wp:swell/button {"align":"center","size":"l","color":"red","url":"#affiliate-link","text":"正規の販売サイトはこちら"} -->
+<div class="wp-block-swell-button aligncenter">
+<a href="#affiliate-link" class="swell-block-button red_ size-l">
+<span>正規の販売サイトはこちら</span>
+</a>
+</div>
+<!-- /wp:swell/button -->
