@@ -9,7 +9,32 @@ class GeminiAPI:
     def __init__(self, api_key: str):
         """Gemini APIクライアントの初期化"""
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        
+        # 優先順位の高いモデル名から試す
+        model_names = [
+            'gemini-2.5-pro',
+            'models/gemini-2.5-pro',
+            'gemini-1.5-pro', 
+            'gemini-1.5-flash',
+            'gemini-pro',
+            'models/gemini-1.5-pro',
+            'models/gemini-1.5-flash',
+            'models/gemini-pro'
+        ]
+        
+        self.model = None
+        for model_name in model_names:
+            try:
+                self.model = genai.GenerativeModel(model_name)
+                logger.info(f"Successfully initialized Gemini model: {model_name}")
+                break
+            except Exception as e:
+                logger.debug(f"Failed to initialize model {model_name}: {e}")
+                continue
+        
+        if self.model is None:
+            logger.error("Failed to initialize any Gemini model")
+            raise Exception("No available Gemini model found")
         
     def rewrite_description(self, title: str, original_description: str, target_length: int = 180) -> Optional[str]:
         """作品紹介文をリライト"""

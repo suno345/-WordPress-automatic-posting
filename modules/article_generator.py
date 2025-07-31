@@ -1,4 +1,5 @@
 import random
+import os
 from typing import Dict, List
 import logging
 
@@ -9,21 +10,39 @@ class ArticleGenerator:
     def __init__(self, wordpress_api):
         """記事生成クラスの初期化"""
         self.wp_api = wordpress_api
+        self.h2_patterns_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'H2見出し')
+    
+    def load_h2_pattern(self, work_title: str) -> str:
+        """H2見出しパターンファイルを読み込み、タイトルを置換"""
+        try:
+            # パターン1-3からランダムに選択
+            pattern_num = random.randint(1, 3)
+            pattern_file = os.path.join(self.h2_patterns_dir, f'パターン{pattern_num}')
+            
+            if os.path.exists(pattern_file):
+                with open(pattern_file, 'r', encoding='utf-8') as f:
+                    pattern_content = f.read().strip()
+                    # 「タイトル」を実際の作品名に置換
+                    return pattern_content.replace('「タイトル」', f'「{work_title}」')
+            else:
+                logger.warning(f"H2パターンファイルが見つかりません: {pattern_file}")
+                # フォールバック用の固定見出し
+                fallback_headings = {
+                    1: "作品の見どころ",
+                    2: "この作品のおすすめポイント", 
+                    3: "注目すべき魅力"
+                }
+                return fallback_headings.get(pattern_num, fallback_headings[1])
+                
+        except Exception as e:
+            logger.error(f"H2パターン読み込みエラー: {e}")
+            return "作品の見どころ"
         
     def generate_article_content(self, work_data: Dict, rewritten_description: str) -> str:
         """記事本文を生成"""
         
         # サークル名のタグアーカイブURL
         circle_tag_url = self.wp_api.get_tag_archive_url(work_data['circle_name'])
-        
-        # H2見出しパターンをランダムに選択
-        h2_pattern = random.randint(1, 3)
-        h2_headings = {
-            1: "作品の見どころ",
-            2: "この作品のおすすめポイント",
-            3: "注目すべき魅力"
-        }
-        h2_heading = h2_headings[h2_pattern]
         
         # 記事本文の組み立て
         content_parts = []
@@ -55,12 +74,17 @@ class ArticleGenerator:
             content_parts.append(f'<p><strong>ジャンル：</strong>{", ".join(genre_links)}</p>')
         
         # サンプル画像
-        if work_data['sample_images']:
+        logger.info(f"Processing sample images for {work_data['title']}: {len(work_data.get('sample_images', []))} images")
+        if work_data.get('sample_images'):
+            logger.info(f"Adding sample images section with {len(work_data['sample_images'])} images")
             content_parts.append('<h3>サンプル画像</h3>')
-            for img_url in work_data['sample_images'][:5]:  # 最大5枚まで
+            for i, img_url in enumerate(work_data['sample_images'][:5]):  # 最大5枚まで
+                logger.info(f"Adding sample image {i+1}: {img_url}")
                 content_parts.append(
                     f'<img src="{img_url}" alt="{work_data["title"]} サンプル画像" class="aligncenter size-full" />'
                 )
+        else:
+            logger.info(f"No sample images found for {work_data['title']}")
         
         # アフィリエイトリンク（ボタン）
         content_parts.append(
@@ -77,12 +101,9 @@ class ArticleGenerator:
                     content_parts.append(f'<p><strong>評価：</strong>{review["rating"]}</p>')
                 content_parts.append(f'<blockquote>{review["text"]}</blockquote>')
         
-        # H2見出し
-        content_parts.append(f'<h2>{h2_heading}</h2>')
-        content_parts.append(
-            '<p>この作品は、ストーリー展開と魅力的なキャラクターが特徴的です。'
-            'ぜひ一度ご覧になってみてください。</p>'
-        )
+        # H2見出しパターンを読み込み
+        h2_content = self.load_h2_pattern(work_data['title'])
+        content_parts.append(h2_content)
         
         # 関連作品（WordPressの機能で自動表示される想定のためコメント）
         content_parts.append('<!-- 関連作品はWordPressプラグインで自動表示 -->')
