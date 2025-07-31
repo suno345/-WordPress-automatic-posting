@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# 設定ファイル
+config.ini
+.env
+
+# データファイル
+data/posted_works.json
+
+# ログファイル
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# テスト
+.pytest_cache/
+.coverage
+htmlcov/
