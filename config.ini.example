@@ -3,8 +3,10 @@ url = https://your-wordpress-site.com
 username = your_username
 password = your_app_password
 
-[fanza]
-# FANZAアフィリエイトID（必要に応じて設定）
+[dmm_api]
+# DMM アフィリエイト API ID（必須）
+api_id = your_dmm_api_id
+# DMM アフィリエイト ID（オプション）
 affiliate_id = your_affiliate_id
 
 [gemini]

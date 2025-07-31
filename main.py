@@ -6,7 +6,7 @@ import sys
 from datetime import datetime, timedelta
 import time
 
-from modules.fanza_scraper import FANZAScraper
+from modules.dmm_api import DMMAPIClient
 from modules.gemini_api import GeminiAPI
 from modules.wordpress_api import WordPressAPI
 from modules.article_generator import ArticleGenerator
@@ -64,7 +64,8 @@ def main():
         wp_username = config.get('wordpress', 'username')
         wp_password = config.get('wordpress', 'password')
         
-        fanza_affiliate_id = config.get('fanza', 'affiliate_id', fallback='')
+        dmm_api_id = config.get('dmm_api', 'api_id')
+        dmm_affiliate_id = config.get('dmm_api', 'affiliate_id', fallback='')
         
         gemini_api_key = config.get('gemini', 'api_key')
         
@@ -74,8 +75,9 @@ def main():
         # 各モジュールの初期化
         logger.info("モジュールを初期化中...")
         
-        scraper = FANZAScraper(
-            affiliate_id=fanza_affiliate_id,
+        dmm_client = DMMAPIClient(
+            api_id=dmm_api_id,
+            affiliate_id=dmm_affiliate_id,
             request_delay=request_delay
         )
         
@@ -91,22 +93,27 @@ def main():
         
         post_manager = PostManager()
         
-        # FANZAの作品一覧URL
-        list_url = "https://www.dmm.co.jp/dc/doujin/-/list/=/media=comic/review_score=3.5/section=mens/sort=date/?dmmref=detailedSearch"
+        # DMM API から作品リストを取得
+        logger.info("DMM API から作品リストを取得中...")
+        api_items = dmm_client.get_items(limit=50)  # 50件取得
         
-        # 作品リストの取得
-        logger.info(f"作品リストを取得中: {list_url}")
-        work_urls = scraper.get_work_list(list_url)
-        
-        if not work_urls:
+        if not api_items:
             logger.warning("作品が見つかりませんでした")
             return
         
-        # 未投稿作品のフィルタリング
-        work_ids = [scraper._extract_work_id(url) for url in work_urls]
-        unposted_ids = post_manager.filter_unposted_works(work_ids)
+        # 作品データに変換
+        work_list = []
+        for item in api_items:
+            work_data = dmm_client.convert_to_work_data(item)
+            if work_data:
+                work_list.append(work_data)
         
-        if not unposted_ids:
+        # 未投稿作品のフィルタリング
+        work_ids = [work['work_id'] for work in work_list]
+        unposted_ids = post_manager.filter_unposted_works(work_ids)
+        unposted_works = [work for work in work_list if work['work_id'] in unposted_ids]
+        
+        if not unposted_works:
             logger.info("新しい作品はありません")
             return
         
@@ -115,19 +122,9 @@ def main():
         tomorrow = datetime.now() + timedelta(days=1)
         tomorrow = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
         
-        for i, work_id in enumerate(unposted_ids[:max_posts]):
+        for i, work_data in enumerate(unposted_works[:max_posts]):
             try:
-                # 作品URLの再構築
-                work_url = next(url for url in work_urls if work_id in url)
-                
-                logger.info(f"作品情報を取得中 ({i+1}/{len(unposted_ids[:max_posts])}): {work_url}")
-                
-                # 作品詳細の取得
-                work_data = scraper.scrape_work_detail(work_url)
-                
-                if not work_data:
-                    logger.error(f"作品情報の取得に失敗: {work_url}")
-                    continue
+                logger.info(f"作品を処理中 ({i+1}/{len(unposted_works[:max_posts])}): {work_data['title']}")
                 
                 # 紹介文のリライト
                 logger.info("紹介文をリライト中...")
@@ -174,7 +171,7 @@ def main():
                     logger.error(f"投稿に失敗: {post_data['title']}")
                 
                 # 次の処理まで待機
-                if i < len(unposted_ids[:max_posts]) - 1:
+                if i < len(unposted_works[:max_posts]) - 1:
                     time.sleep(request_delay)
                 
             except Exception as e:
