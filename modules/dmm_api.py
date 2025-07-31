@@ -25,13 +25,15 @@ class DMMAPIClient:
                 'api_id': self.api_id,
                 'affiliate_id': self.affiliate_id,
                 'site': 'FANZA',
-                'service': 'doujin',
-                'floor': 'doujin-comic',
+                'service': 'digital',  # デジタルコンテンツ
+                'floor': 'comic',      # コミックフロア
                 'hits': limit,
                 'offset': offset,
-                'sort': 'date',  # 新着順
+                'sort': 'date',        # 新着順
                 'output': 'json',
-                'review_average': '3.0'  # レビュー平均3.0以上（レビューがある商品）
+                'keyword': '同人',     # 同人作品に絞り込み
+                'article': 'review',   # レビューフィルタ
+                'article_id': 'review.count'  # レビュー数でフィルタ
             }
             
             # affiliate_idが空の場合は除外
@@ -91,7 +93,7 @@ class DMMAPIClient:
                 'title': api_item.get('title', ''),
                 'circle_name': self._extract_circle_name(api_item),
                 'author_name': self._extract_author_name(api_item),
-                'category': '同人コミック',
+                'category': '同人',
                 'package_image_url': api_item.get('imageURL', {}).get('large', ''),
                 'description': api_item.get('comment', ''),
                 'page_count': self._extract_page_count(api_item),
