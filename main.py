@@ -64,7 +64,16 @@ def main():
         wp_username = config.get('wordpress', 'username')
         wp_password = config.get('wordpress', 'password')
         
-        dmm_api_id = config.get('dmm_api', 'api_id')
+        try:
+            dmm_api_id = config.get('dmm_api', 'api_id')
+            if dmm_api_id == 'your_dmm_api_id':
+                logger.error("DMM API ID が設定されていません。config.ini を確認してください。")
+                logger.error("DMM アフィリエイト（https://affiliate.dmm.com/)でAPI IDを取得してください。")
+                return
+        except Exception as e:
+            logger.error(f"DMM API 設定の読み込みに失敗: {e}")
+            return
+            
         dmm_affiliate_id = config.get('dmm_api', 'affiliate_id', fallback='')
         
         gemini_api_key = config.get('gemini', 'api_key')
