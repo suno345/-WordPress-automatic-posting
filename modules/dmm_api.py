@@ -98,6 +98,11 @@ class DMMAPIClient:
             # コミック作品のみを対象とする
             if not self.is_comic_work(api_item):
                 return None
+            
+            # レビューがない作品はスキップ
+            if 'review' not in api_item or api_item.get('review', {}).get('count', 0) == 0:
+                logger.info(f"Skipping work without reviews: {api_item.get('title', 'Unknown')}")
+                return None
             # ジャンル情報の抽出
             genres = []
             if 'iteminfo' in api_item and 'genre' in api_item['iteminfo']:
@@ -119,9 +124,8 @@ class DMMAPIClient:
             else:
                 logger.info("No 'sampleImageURL' key in API response")
             
-            # レビュー情報の抽出（今回のAPIレスポンスにはreviewが含まれていないようです）
+            # レビュー情報の抽出
             reviews = []
-            # 将来的にレビュー情報が追加された場合の処理
             if 'review' in api_item:
                 review_data = api_item['review']
                 reviews.append({

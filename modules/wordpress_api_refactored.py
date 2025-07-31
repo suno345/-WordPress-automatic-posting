@@ -119,23 +119,16 @@ class WordPressAPI:
             logger.error(error_msg)
             raise WordPressAPIError(error_msg)
     
-    def get_or_create_category(self, category_name) -> Optional[int]:
+    def get_or_create_category(self, category_name: str) -> Optional[int]:
         """
         カテゴリーを取得または作成
         
         Args:
-            category_name: カテゴリー名（文字列またはリスト）
+            category_name: カテゴリー名
         
         Returns:
             カテゴリーID、失敗時はNone
         """
-        # リストの場合は最初の要素を使用
-        if isinstance(category_name, list):
-            if not category_name:
-                category_name = '同人'
-            else:
-                category_name = category_name[0]
-        
         normalized_name = normalize_string(category_name)
         
         # キャッシュチェック

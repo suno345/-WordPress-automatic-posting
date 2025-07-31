@@ -150,7 +150,19 @@ def main():
                 post_data = article_gen.prepare_post_data(work_data, rewritten_description)
                 
                 # カテゴリーとタグの処理
-                category_id = wp_api.get_or_create_category(post_data['category'])
+                # カテゴリーが複数の場合に対応
+                category_ids = []
+                categories = post_data['category']
+                if isinstance(categories, str):
+                    categories = [categories]
+                elif not isinstance(categories, list):
+                    categories = ['同人']
+                
+                for category in categories:
+                    category_id = wp_api.get_or_create_category(category)
+                    if category_id:
+                        category_ids.append(category_id)
+                
                 tag_ids = []
                 for tag in post_data['tags']:
                     tag_id = wp_api.get_or_create_tag(tag)
@@ -168,7 +180,7 @@ def main():
                 post_id = wp_api.create_post(
                     title=post_data['title'],
                     content=post_data['content'],
-                    categories=[category_id] if category_id else [],
+                    categories=category_ids,
                     tags=tag_ids,
                     status='future',
                     scheduled_date=post_time,
