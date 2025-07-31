@@ -8,8 +8,8 @@ import time
 
 from modules.dmm_api import DMMAPIClient
 from modules.gemini_api import GeminiAPI
-from modules.wordpress_api import WordPressAPI
-from modules.article_generator import ArticleGenerator
+from modules.wordpress_api_refactored import WordPressAPI
+from modules.article_generator_refactored import ArticleGenerator
 from modules.post_manager import PostManager
 
 
@@ -162,13 +162,17 @@ def main():
                 
                 # WordPress投稿
                 logger.info(f"WordPressに投稿中: {post_data['title']}")
+                # 商品IDをスラッグとして使用
+                work_slug = post_data.get('work_id', '').replace('d_', '') if post_data.get('work_id') else None
+                
                 post_id = wp_api.create_post(
                     title=post_data['title'],
                     content=post_data['content'],
                     categories=[category_id] if category_id else [],
                     tags=tag_ids,
                     status='future',
-                    scheduled_date=post_time
+                    scheduled_date=post_time,
+                    slug=work_slug
                 )
                 
                 if post_id:

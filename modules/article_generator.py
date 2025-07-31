@@ -90,11 +90,9 @@ class ArticleGenerator:
         else:
             logger.info(f"No sample images found for {work_data['title']}")
         
-        # アフィリエイトリンク（ボタン）
+        # アフィリエイトリンク（ボタン）- SWELLボタン形式
         content_parts.append(
-            f'<div class="swell-block-button red_ is-style-btn_solid">'
-            f'<a href="{work_data["affiliate_url"]}" class="swell-block-button__link">'
-            f'<span>続きを読むにはクリック</span></a></div>'
+            f'<div class="swell-block-button red_ is-style-btn_solid"><a href="{work_data["affiliate_url"]}" class="swell-block-button__link"><span>続きを読むにはクリック</span></a></div>'
         )
         
         # レビュー
@@ -123,19 +121,19 @@ class ArticleGenerator:
         # 記事本文
         content = self.generate_article_content(work_data, rewritten_description)
         
-        # タグ（作者名、サークル名）
+        # タグ（作者名、サークル名のみ）
         tags = []
         if work_data['circle_name']:
             tags.append(work_data['circle_name'])
         if work_data['author_name'] and work_data['author_name'] != work_data['circle_name']:
             tags.append(work_data['author_name'])
         
-        # ジャンルもタグとして追加
-        if work_data['genres']:
-            tags.extend(work_data['genres'])
-        
-        # カテゴリー
-        category = work_data['category'] if work_data['category'] else '同人'
+        # カテゴリー（全てのジャンルを使用）
+        category = '同人'  # デフォルト
+        if work_data['genres'] and len(work_data['genres']) > 0:
+            category = work_data['genres']  # 全てのジャンルをリストで渡す
+        elif work_data['category']:
+            category = work_data['category']
         
         return {
             'title': title,

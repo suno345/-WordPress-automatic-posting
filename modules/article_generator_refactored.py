@@ -221,9 +221,7 @@ class ArticleGenerator:
             return []
         
         return [
-            '<div class="swell-block-button red_ is-style-btn_solid">'
-            f'<a href="{affiliate_url}" class="swell-block-button__link">'
-            '<span>続きを読むにはクリック</span></a></div>'
+            f'<div class="swell-block-button red_ is-style-btn_solid"><a href="{affiliate_url}" class="swell-block-button__link"><span>続きを読むにはクリック</span></a></div>'
         ]
     
     def _generate_review_section(self, work_data: Dict) -> List[str]:
@@ -274,8 +272,13 @@ class ArticleGenerator:
         # タグの準備
         tags = self._prepare_tags(work_data)
         
-        # カテゴリー
-        category = work_data.get('category', DefaultValues.DEFAULT_CATEGORY)
+        # カテゴリー（全てのジャンルを使用）
+        category = DefaultValues.DEFAULT_CATEGORY  # デフォルト: '同人'
+        genres = work_data.get('genres', [])
+        if genres and len(genres) > 0:
+            category = genres  # 全てのジャンルをリストで渡す
+        elif work_data.get('category'):
+            category = work_data.get('category')
         
         return {
             'title': title,
@@ -286,7 +289,7 @@ class ArticleGenerator:
         }
     
     def _prepare_tags(self, work_data: Dict) -> List[str]:
-        """タグリストを準備"""
+        """タグリストを準備（作者名・サークル名のみ）"""
         tags = []
         
         # サークル名をタグに追加
@@ -300,11 +303,6 @@ class ArticleGenerator:
             author_name != DefaultValues.CIRCLE_NAME_UNKNOWN and 
             author_name != circle_name):
             tags.append(author_name)
-        
-        # ジャンルをタグに追加
-        genres = work_data.get('genres', [])
-        if genres:
-            tags.extend(genres)
         
         # 重複を除去して返す
         return list(dict.fromkeys(tags))  # 順序を保持しつつ重複除去

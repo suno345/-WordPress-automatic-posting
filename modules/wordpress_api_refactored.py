@@ -60,7 +60,8 @@ class WordPressAPI:
         categories: List[int], 
         tags: List[int], 
         status: str = 'future', 
-        scheduled_date: Optional[datetime] = None
+        scheduled_date: Optional[datetime] = None,
+        slug: Optional[str] = None
     ) -> Optional[int]:
         """
         WordPressに記事を投稿
@@ -72,6 +73,7 @@ class WordPressAPI:
             tags: タグIDのリスト
             status: 投稿ステータス
             scheduled_date: 予約投稿日時
+            slug: URLスラッグ（商品IDなど）
         
         Returns:
             投稿ID、失敗時はNone
@@ -92,6 +94,10 @@ class WordPressAPI:
                 'tags': tags,
                 'date': scheduled_date.strftime('%Y-%m-%dT%H:%M:%S'),
             }
+            
+            # スラッグが指定されている場合は追加
+            if slug:
+                post_data['slug'] = slug
             
             response = self.session.post(f"{self.api_url}/posts", json=post_data)
             
