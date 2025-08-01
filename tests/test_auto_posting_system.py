@@ -26,6 +26,7 @@ class TestAutoPostingSystem:
         config.system.log_level = 'INFO'
         config.system.request_delay = 1
         config.system.max_posts_per_run = 5
+        config.system.search_limit = 100
         config.system.post_interval = 60
         config.dmm_api.api_id = 'test_api_id'
         config.dmm_api.affiliate_id = 'test_affiliate_id'
@@ -378,6 +379,102 @@ class TestAutoPostingSystem:
             assert result['processed'] == 0
             assert result['posted'] == 0
             assert result['total_posted'] == 10
+
+    @patch('src.core.auto_posting_system.ConfigManager')
+    @patch('src.core.auto_posting_system.setup_logging')
+    def test_fetch_works_with_additional_search(self, mock_setup_logging, mock_config_manager, mock_config):
+        """追加検索機能テスト"""
+        mock_config_manager.return_value = mock_config
+        mock_setup_logging.return_value = MagicMock()
+
+        # 設定：必要数5件、初回検索で2件のみ発見
+        mock_config.system.max_posts_per_run = 5
+        mock_config.system.search_limit = 20
+        mock_config.system.request_delay = 0  # テスト用に待機時間を0に
+
+        # DMM APIクライアントのモック
+        mock_dmm_client = MagicMock()
+        
+        # 初回検索：20件中2件がコミック作品
+        initial_items = [{'id': '1'}, {'id': '2'}] + [{'id': f'game_{i}'} for i in range(18)]
+        # 追加検索：50件中3件がコミック作品  
+        additional_items = [{'id': '3'}, {'id': '4'}, {'id': '5'}] + [{'id': f'cg_{i}'} for i in range(47)]
+        
+        mock_dmm_client.get_items.side_effect = [initial_items, additional_items]
+        
+        # convert_to_work_dataの動作をモック
+        def mock_convert(item, skip_review_check=False):
+            item_id = item.get('id')
+            if item_id in ['1', '2', '3', '4', '5']:  # 最初の5件のみコミック作品として扱う
+                return {
+                    'work_id': item_id,
+                    'title': f'コミック作品{item_id}',
+                    'circle_name': f'サークル{item_id}'
+                }
+            return None  # その他は非コミック作品として除外
+        
+        mock_dmm_client.convert_to_work_data.side_effect = mock_convert
+
+        with patch.multiple(
+            'src.core.auto_posting_system',
+            DMMAPIClient=lambda **kwargs: mock_dmm_client,
+            GeminiAPI=MagicMock(),
+            WordPressAPI=MagicMock(),
+            ArticleGenerator=MagicMock(),
+            PostManager=MagicMock(),
+            time=MagicMock()  # time.sleepをモック
+        ):
+            system = AutoPostingSystem()
+            works = system._fetch_works()
+            
+            # 初回検索で不足を検出し、追加検索が実行されることを確認
+            assert len(works) == 5  # 必要数5件を確保
+            assert mock_dmm_client.get_items.call_count == 2  # 初回 + 追加検索1回
+            assert works[0]['work_id'] == '1'
+            assert works[1]['work_id'] == '2'
+            assert works[2]['work_id'] == '3'
+
+    @patch('src.core.auto_posting_system.ConfigManager')
+    @patch('src.core.auto_posting_system.setup_logging')
+    def test_fetch_works_sufficient_initial_search(self, mock_setup_logging, mock_config_manager, mock_config):
+        """初回検索で十分な作品が見つかる場合のテスト"""
+        mock_config_manager.return_value = mock_config
+        mock_setup_logging.return_value = MagicMock()
+
+        # 設定：必要数2件、初回検索で5件発見
+        mock_config.system.max_posts_per_run = 2
+        mock_config.system.search_limit = 20
+
+        mock_dmm_client = MagicMock()
+        mock_dmm_client.get_items.return_value = [{'id': str(i)} for i in range(1, 21)]  # 20件
+
+        # 最初の5件をコミック作品として扱う
+        def mock_convert(item, skip_review_check=False):
+            item_id = item.get('id')
+            if int(item_id) <= 5:
+                return {
+                    'work_id': item_id,
+                    'title': f'コミック作品{item_id}',
+                    'circle_name': f'サークル{item_id}'
+                }
+            return None
+
+        mock_dmm_client.convert_to_work_data.side_effect = mock_convert
+
+        with patch.multiple(
+            'src.core.auto_posting_system',
+            DMMAPIClient=lambda **kwargs: mock_dmm_client,
+            GeminiAPI=MagicMock(),
+            WordPressAPI=MagicMock(),
+            ArticleGenerator=MagicMock(),
+            PostManager=MagicMock()
+        ):
+            system = AutoPostingSystem()
+            works = system._fetch_works()
+            
+            # 初回検索のみで十分な数が確保され、追加検索は実行されない
+            assert len(works) == 5  # 見つかった全コミック作品
+            assert mock_dmm_client.get_items.call_count == 1  # 初回検索のみ
 
 
 if __name__ == '__main__':

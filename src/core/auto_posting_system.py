@@ -130,23 +130,77 @@ class AutoPostingSystem:
             raise AutoPostingError(f"実行中にエラーが発生しました: {e}")
     
     def _fetch_works(self) -> List[Dict]:
-        """作品データを取得"""
+        """作品データを取得（必要に応じて追加検索を実行）"""
         self.logger.info("DMM API から作品リストを取得中...")
         
-        api_items = self.dmm_client.get_items(limit=self.config.system.search_limit)
+        # 初回検索
+        work_list = self._search_and_convert_works(limit=self.config.system.search_limit, offset=1)
+        
+        # 必要投稿数に対してコミック作品が不足している場合は追加検索
+        required_works = self.config.system.max_posts_per_run
+        if len(work_list) < required_works:
+            self.logger.warning(f"初回検索でコミック作品が不足: {len(work_list)}/{required_works}件")
+            work_list.extend(self._perform_additional_searches(work_list, required_works))
+        
+        self.logger.info(f"最終的に{len(work_list)}件のコミック作品を取得しました")
+        return work_list
+    
+    def _search_and_convert_works(self, limit: int, offset: int) -> List[Dict]:
+        """指定した範囲でAPIを呼び出してコミック作品に変換"""
+        api_items = self.dmm_client.get_items(limit=limit, offset=offset)
         
         if not api_items:
             return []
         
-        # 作品データに変換
+        # 作品データに変換（コミック作品のみ）
         work_list = []
         for item in api_items:
             work_data = self.dmm_client.convert_to_work_data(item, skip_review_check=self.skip_review_check)
             if work_data:
                 work_list.append(work_data)
         
-        self.logger.info(f"{len(work_list)}件の作品データを変換しました")
+        self.logger.info(f"検索範囲{offset}-{offset+limit-1}: {len(work_list)}件のコミック作品を発見")
         return work_list
+    
+    def _perform_additional_searches(self, existing_works: List[Dict], required_count: int) -> List[Dict]:
+        """追加検索を実行してコミック作品を補充"""
+        additional_works = []
+        current_offset = self.config.system.search_limit + 1
+        batch_size = Constants.ADDITIONAL_SEARCH_BATCH_SIZE
+        max_searches = Constants.MAX_ADDITIONAL_SEARCHES
+        
+        existing_work_ids = {work['work_id'] for work in existing_works}
+        
+        for search_round in range(max_searches):
+            if len(existing_works) + len(additional_works) >= required_count:
+                break
+                
+            self.logger.info(f"追加検索 {search_round + 1}/{max_searches} を実行中...")
+            
+            # 追加検索実行
+            new_works = self._search_and_convert_works(limit=batch_size, offset=current_offset)
+            
+            # 重複除去
+            for work in new_works:
+                if work['work_id'] not in existing_work_ids:
+                    additional_works.append(work)
+                    existing_work_ids.add(work['work_id'])
+                    
+                    if len(existing_works) + len(additional_works) >= required_count:
+                        break
+            
+            current_offset += batch_size
+            
+            # API制限を考慮した待機
+            if search_round < max_searches - 1:
+                time.sleep(self.config.system.request_delay)
+        
+        if additional_works:
+            self.logger.info(f"追加検索で{len(additional_works)}件のコミック作品を追加取得")
+        else:
+            self.logger.warning("追加検索でもコミック作品が見つかりませんでした")
+            
+        return additional_works
     
     def _filter_unposted_works(self, works: List[Dict]) -> List[Dict]:
         """未投稿作品のフィルタリング"""
