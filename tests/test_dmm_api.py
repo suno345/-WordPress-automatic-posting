@@ -453,18 +453,6 @@ class TestDMMAPIClient:
         assert hasattr(client_new, 'no_review_indicators')
         assert hasattr(client_new, 'html_selectors')
 
-    def test_use_default_patterns(self, client):
-        """デフォルトパターン使用テスト"""
-        client._use_default_patterns()
-        
-        assert len(client.review_patterns) > 0
-        assert len(client.review_section_patterns) > 0
-        assert len(client.no_review_indicators) > 0
-        assert len(client.html_selectors) > 0
-        
-        # 期待されるパターンが含まれているか確認
-        assert r'レビュー\s*[（(]\s*(\d+)\s*件\s*[）)]' in client.review_patterns
-        assert 'この作品に最初のレビューを書いてみませんか？' in client.no_review_indicators
 
 
 if __name__ == '__main__':

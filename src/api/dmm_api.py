@@ -1,14 +1,10 @@
 import requests
 import time
 import logging
-import yaml
-import hashlib
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
-from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
-from pathlib import Path
 
 from ..services.resource_manager import SessionMixin
 from ..services.cache_manager import get_cache
@@ -37,80 +33,8 @@ class DMMAPIClient(SessionMixin):
         # 多層キャッシュマネージャー
         self.cache_manager = get_cache()
         
-        self._load_config()
         
-    def _load_config(self) -> None:
-        """設定ファイルからレビューパターンを読み込み"""
-        try:
-            config_path = Path(__file__).parent.parent.parent / "config" / "review_patterns.yaml"
-            if config_path.exists():
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = yaml.safe_load(f)
-                    
-                # レビューパターンを読み込み
-                review_patterns = config.get('review_patterns', {})
-                self.review_patterns = []
-                
-                # 各カテゴリのパターンを統合
-                for category in ['basic', 'modern', 'english', 'fanza_specific']:
-                    patterns = review_patterns.get(category, [])
-                    for pattern_config in patterns:
-                        self.review_patterns.append(pattern_config['pattern'])
-                
-                # レビューセクション用パターン
-                self.review_section_patterns = [
-                    pattern_config['pattern'] for pattern_config in 
-                    config.get('review_section_patterns', [])
-                ]
-                
-                # レビューなし判定パターン
-                self.no_review_indicators = config.get('no_review_indicators', [])
-                
-                # HTMLセレクタ
-                self.html_selectors = config.get('html_selectors', [])
-                
-                logger.info(f"設定ファイルから{len(self.review_patterns)}個のレビューパターンを読み込みました")
-            else:
-                logger.warning(f"設定ファイルが見つかりません: {config_path}")
-                self._use_default_patterns()
-        except Exception as e:
-            logger.error(f"設定ファイル読み込みエラー: {e}")
-            self._use_default_patterns()
     
-    def _use_default_patterns(self) -> None:
-        """デフォルトのレビューパターンを使用"""
-        self.review_patterns = [
-            r'レビュー\s*[（(]\s*(\d+)\s*件\s*[）)]',
-            r'レビュー\s*:\s*(\d+)\s*件',
-            r'レビュー\s+(\d+)\s*件',
-            r'評価\s*[（(]\s*(\d+)\s*件\s*[）)]',
-            r'(\d+)\s*件のレビュー',
-            r'(\d+)\s*人がレビュー',
-            r'レビュー数\s*[:：]\s*(\d+)',
-            r'(\d+)\s+reviews?\b',
-        ]
-        
-        self.review_section_patterns = [
-            r'総評価数\s*(\d+)\s*[（(]',
-            r'総評価数\s*(\d+)',
-            r'平均評価\s*[\d.]+\s*総評価数\s*(\d+)',
-            r'(\d+)\s*件のレビュー',
-            r'レビュー\s*(\d+)\s*件',
-        ]
-        
-        self.no_review_indicators = [
-            'この作品に最初のレビューを書いてみませんか？',
-            '最初のレビューを書いて',
-            '最初のレビューを投稿'
-        ]
-        
-        self.html_selectors = [
-            '.review-list',
-            '.review-item',
-            '[class*="review-count"]',
-            '[class*="rating-count"]',
-            '[data-review-count]'
-        ]
         
     def get_items(self, limit: int = 20, offset: int = 1, use_genre_filter: bool = True) -> List[Dict]:
         """商品一覧を取得（新着順の同人コミック・インテリジェントリトライ付き）"""
@@ -465,152 +389,8 @@ class DMMAPIClient(SessionMixin):
             logger.warning(f"Error in _process_single_item_safe: {e}")
             return None
     
-    def get_review_info_from_page_cached(self, product_url: str) -> Dict:
-        """キャッシュ機能付きレビュー情報取得（多層キャッシュ活用）"""
-        # 多層キャッシュから取得を試行
-        cache_key = f"review_{hashlib.md5(product_url.encode()).hexdigest()}"
-        cached_review = self.cache_manager.get(cache_key, "reviews")
-        
-        if cached_review is not None:
-            logger.debug(f"Using cached review data for: {product_url}")
-            return cached_review
-        
-        # キャッシュにない場合は取得
-        review_info = self.get_review_info_from_page(product_url)
-        
-        # 多層キャッシュに保存（6時間有効）
-        self.cache_manager.set(cache_key, review_info, "reviews", ttl_hours=6)
-        
-        return review_info
     
-    def get_review_info_batch(self, product_urls: List[str]) -> Dict[str, Dict]:
-        """複数商品のレビュー情報を並列取得"""
-        results = {}
-        
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # 並列でレビュー情報を取得
-            future_to_url = {
-                executor.submit(self.get_review_info_from_page_cached, url): url 
-                for url in product_urls
-            }
-            
-            for future in as_completed(future_to_url):
-                url = future_to_url[future]
-                try:
-                    result = future.result()
-                    results[url] = result
-                    logger.debug(f"Completed review check for {url}: {result['count']} reviews")
-                except Exception as e:
-                    logger.error(f"Error checking reviews for {url}: {e}")
-                    results[url] = {'count': 0, 'average': 0.0, 'has_reviews': False}
-        
-        return results
     
-    def get_review_info_from_page(self, product_url: str) -> Dict:
-        """商品ページからレビュー情報を取得"""
-        try:
-            time.sleep(self.request_delay)  # リクエスト間隔を保持
-            
-            # 年齢認証対応のCookie設定
-            self.session.cookies.set('age_check_done', '1', domain='.dmm.co.jp')
-            self.session.cookies.set('ckcy', '1', domain='.dmm.co.jp')
-            
-            # より包括的なヘッダー設定
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
-                'Accept-Encoding': 'gzip, deflate',
-                'Referer': 'https://www.dmm.co.jp/',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache'
-            }
-            
-            response = self.session.get(product_url, headers=headers)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # レビュー数を取得
-            review_count = 0
-            review_average = 0.0
-            
-            # FANZA商品ページのレビュー要素を探す（複数パターンで検索）
-            import re
-            
-            # パターン1: レビュー数の直接検索（設定ファイルから読み込み）
-            
-            # 全テキストを取得して検索
-            page_text = soup.get_text()
-            for pattern in self.review_patterns:
-                matches = re.findall(pattern, page_text)
-                if matches:
-                    review_count = int(matches[0])
-                    logger.info(f"Found review count using pattern '{pattern}': {review_count}")
-                    break
-            
-            # パターン2: HTML要素から検索（FANZA構造に特化）
-            if review_count == 0:
-                # FANZA の review_anchor 要素をチェック
-                review_section = soup.find(id='review_anchor')
-                if review_section:
-                    review_text = review_section.get_text()
-                    logger.info(f"Review section text: {review_text[:200]}...")
-                    
-                    # レビューなし判定（設定ファイルから読み込み）
-                    if any(indicator in review_text for indicator in self.no_review_indicators):
-                        logger.info("No reviews found - first review prompt detected")
-                        review_count = 0
-                    else:
-                        # レビューが存在する場合のパターンを検索（設定ファイルから読み込み）
-                        for pattern in self.review_section_patterns:
-                            matches = re.findall(pattern, review_text)
-                            if matches:
-                                review_count = int(matches[0])
-                                logger.info(f"Found review count in review section using pattern '{pattern}': {review_count}")
-                                break
-                
-                # さらに他の要素をチェック（設定ファイルから読み込み）
-                if review_count == 0:
-                    for selector in self.html_selectors:
-                        elements = soup.select(selector)
-                        for element in elements:
-                            text = element.get_text().strip()
-                            # 数字を含むテキストをチェック
-                            numbers = re.findall(r'(\d+)', text)
-                            if numbers and any(keyword in text for keyword in ['件', 'レビュー', 'review', '評価']):
-                                review_count = int(numbers[0])
-                                logger.info(f"Found review count using selector '{selector}': {review_count}")
-                                break
-                        if review_count > 0:
-                            break
-            
-            # デバッグ: レビューが見つからない場合、ページ内容を少し出力
-            if review_count == 0:
-                logger.debug(f"No reviews found for {product_url}")
-                # ページの一部テキストを確認（デバッグ用）
-                sample_text = page_text[:500] if len(page_text) > 500 else page_text
-                logger.debug(f"Sample page text: {sample_text}")
-            
-            # 星評価を取得
-            star_elements = soup.find_all(['span', 'div'], class_=lambda x: x and ('star' in str(x).lower() or 'rating' in str(x).lower()))
-            for element in star_elements:
-                if element.get('data-rating') or element.get('data-score'):
-                    try:
-                        review_average = float(element.get('data-rating') or element.get('data-score'))
-                        break
-                    except (ValueError, TypeError):
-                        continue
-            
-            return {
-                'count': review_count,
-                'average': review_average,
-                'has_reviews': review_count > 0
-            }
-            
-        except Exception as e:
-            logger.warning(f"Failed to get review info from {product_url}: {e}")
-            return {'count': 0, 'average': 0.0, 'has_reviews': False}
     
     def convert_to_work_data(self, api_item: Dict, skip_review_check: bool = False) -> Dict:
         """API レスポンスを内部データ形式に変換"""
@@ -632,36 +412,27 @@ class DMMAPIClient(SessionMixin):
             return None
     
     def _validate_reviews(self, api_item: Dict, skip_review_check: bool) -> bool:
-        """レビュー情報の検証"""
+        """レビュー情報の検証（DMM API直接取得版）"""
         try:
             if skip_review_check:
                 logger.info(f"Skipping review check for: {api_item.get('title', 'Unknown')}")
                 return True
             
-            # APIレスポンスにレビュー情報が含まれている場合
-            if 'review' in api_item and api_item.get('review', {}).get('count', 0) > 0:
-                return True
-            
-            # 商品ページからレビュー情報を取得
-            product_url = api_item.get('URL', '')
-            if not product_url:
-                logger.warning(f"No product URL found for: {api_item.get('title', 'Unknown')}")
+            # DMM APIレスポンスから直接レビュー情報を取得
+            if 'review' in api_item:
+                review_data = api_item['review']
+                review_count = review_data.get('count', 0)
+                
+                if review_count > 0:
+                    logger.info(f"Review found via API: {api_item.get('title', 'Unknown')} - {review_count}件")
+                    return True
+                else:
+                    logger.info(f"No reviews found via API: {api_item.get('title', 'Unknown')}")
+                    return False
+            else:
+                # review情報がAPIレスポンスにない場合
+                logger.info(f"No review data in API response: {api_item.get('title', 'Unknown')}")
                 return False
-            
-            review_info = self.get_review_info_from_page(product_url)
-            has_reviews = review_info['has_reviews']
-            
-            # レビュー情報をapi_itemに追加
-            if has_reviews:
-                api_item['review'] = {
-                    'count': review_info['count'],
-                    'average': review_info['average']
-                }
-                return True
-            
-            # レビューがない作品はスキップ
-            logger.info(f"Skipping work without reviews: {api_item.get('title', 'Unknown')}")
-            return False
             
         except Exception as e:
             logger.error(f"Error validating reviews for {api_item.get('title', 'Unknown')}: {e}")
