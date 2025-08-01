@@ -357,7 +357,7 @@ class DMMAPIClient(SessionMixin):
         return list(self.male_genre_ids)
     
     def get_reviewed_works(self, target_count: int = 5, max_check: int = 100) -> List[Dict]:
-        """レビュー付きの作品を指定数見つけるまで検索"""
+        """レビュー付きの作品を指定数見つけるまで検索（並行処理版）"""
         reviewed_works = []
         current_offset = 1
         batch_size = 20
@@ -369,22 +369,60 @@ class DMMAPIClient(SessionMixin):
             raw_items = self.get_items(limit=batch_size, offset=current_offset)
             if not raw_items:
                 break
-                
-            # 各商品をチェック
-            for item in raw_items:
-                if len(reviewed_works) >= target_count:
-                    break
-                    
-                # データ変換とレビューチェック
-                work_data = self.convert_to_work_data(item)
-                if work_data:  # レビューがある場合のみwork_dataが返される
-                    reviewed_works.append(work_data)
-                    logger.info(f"Found reviewed work: {work_data['title']} ({len(reviewed_works)}/{target_count})")
+            
+            # 改善：レビューチェックを並行処理で実行
+            batch_works = self._process_items_concurrent(raw_items, target_count - len(reviewed_works))
+            reviewed_works.extend(batch_works)
+            
+            if batch_works:
+                logger.info(f"Found {len(batch_works)} reviewed works in batch. Total: {len(reviewed_works)}/{target_count}")
             
             current_offset += batch_size
             
         logger.info(f"Found {len(reviewed_works)} works with reviews")
         return reviewed_works
+    
+    def _process_items_concurrent(self, raw_items: List[Dict], needed_count: int) -> List[Dict]:
+        """商品リストを並行処理でデータ変換とレビューチェック"""
+        if not raw_items or needed_count <= 0:
+            return []
+        
+        reviewed_works = []
+        max_workers = min(5, len(raw_items))  # 最大5並行
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 各商品の処理を並行実行
+            future_to_item = {
+                executor.submit(self._process_single_item_safe, item): item 
+                for item in raw_items
+            }
+            
+            for future in as_completed(future_to_item):
+                if len(reviewed_works) >= needed_count:
+                    # 必要数に達したら残りの処理をキャンセル
+                    for remaining_future in future_to_item:
+                        if not remaining_future.done():
+                            remaining_future.cancel()
+                    break
+                
+                try:
+                    work_data = future.result(timeout=30)  # 30秒タイムアウト
+                    if work_data:
+                        reviewed_works.append(work_data)
+                        logger.debug(f"Concurrent processing found: {work_data['title']}")
+                except Exception as e:
+                    item = future_to_item[future]
+                    logger.warning(f"Error processing item {item.get('title', 'Unknown')}: {e}")
+        
+        return reviewed_works
+    
+    def _process_single_item_safe(self, item: Dict) -> Optional[Dict]:
+        """単一商品の安全な処理（例外処理付き）"""
+        try:
+            return self.convert_to_work_data(item)
+        except Exception as e:
+            logger.warning(f"Error in _process_single_item_safe: {e}")
+            return None
     
     def get_review_info_from_page_cached(self, product_url: str) -> Dict:
         """キャッシュ機能付きレビュー情報取得"""
@@ -588,7 +626,7 @@ class DMMAPIClient(SessionMixin):
             return False
     
     def _extract_sample_images(self, api_item: Dict) -> List[str]:
-        """サンプル画像の抽出"""
+        """サンプル画像の抽出（並行検証付き）"""
         try:
             if 'sampleImageURL' not in api_item:
                 logger.debug("No 'sampleImageURL' key in API response")
@@ -605,13 +643,78 @@ class DMMAPIClient(SessionMixin):
                 logger.debug("No 'image' key in sample_l")
                 return []
             
-            sample_images = sample_url_data['sample_l']['image']
-            logger.info(f"Extracted {len(sample_images)} sample images")
-            return sample_images
+            raw_sample_images = sample_url_data['sample_l']['image']
+            logger.info(f"Found {len(raw_sample_images)} sample images")
+            
+            # 改善：画像URLの検証を並行処理で実行
+            validated_images = self._validate_image_urls_concurrent(raw_sample_images)
+            
+            logger.info(f"Validated {len(validated_images)} sample images")
+            return validated_images
             
         except Exception as e:
             logger.error(f"Error extracting sample images: {e}")
             return []
+    
+    def _validate_image_urls_concurrent(self, image_urls: List[str], max_workers: int = 3) -> List[str]:
+        """画像URLを並行処理で検証"""
+        if not image_urls:
+            return []
+        
+        # 最大5個まで検証（制限を設ける）
+        urls_to_check = image_urls[:5]
+        validated_urls = []
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # 各URLの検証を並行実行
+            future_to_url = {
+                executor.submit(self._validate_single_image_url, url): url 
+                for url in urls_to_check
+            }
+            
+            for future in as_completed(future_to_url):
+                url = future_to_url[future]
+                try:
+                    is_valid = future.result(timeout=10)  # 10秒タイムアウト
+                    if is_valid:
+                        validated_urls.append(url)
+                        logger.debug(f"Image URL validated: {url}")
+                    else:
+                        logger.debug(f"Image URL invalid: {url}")
+                except Exception as e:
+                    logger.warning(f"Error validating image URL {url}: {e}")
+        
+        return validated_urls
+    
+    def _validate_single_image_url(self, url: str) -> bool:
+        """単一画像URLの検証"""
+        try:
+            # URLの基本的な妥当性チェック
+            if not url or not url.startswith(('http://', 'https://')):
+                return False
+            
+            # 画像系の拡張子チェック
+            valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+            if not any(url.lower().endswith(ext) for ext in valid_extensions):
+                # クエリパラメーターがある場合は無視
+                if '?' in url:
+                    base_url = url.split('?')[0]
+                    if not any(base_url.lower().endswith(ext) for ext in valid_extensions):
+                        return False
+                else:
+                    return False
+            
+            # DMM系のドメインチェック
+            dmm_domains = ['dmm.co.jp', 'dmm.com', 'pics.dmm.co.jp', 'doujin-assets.dmm.co.jp']
+            if not any(domain in url for domain in dmm_domains):
+                logger.debug(f"Non-DMM domain detected: {url}")
+                # DMM以外でも有効なURLとして扱う
+            
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Error in _validate_single_image_url: {e}")
+            return False
     
     def _extract_review_data(self, api_item: Dict) -> List[Dict]:
         """レビューデータの抽出"""
