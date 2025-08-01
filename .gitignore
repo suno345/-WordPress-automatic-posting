@@ -28,14 +28,44 @@ ENV/
 env.bak/
 venv.bak/
 
-# Environment variables
+# ========================================
+# セキュリティ：機密情報を含むファイル
+# ========================================
+# 設定ファイル（実際の認証情報を含む）
+config/config.ini
+config/config.vps.ini
+config/config.*.ini
+config/config_*.ini
+config/**/config.ini
+**/config.ini
+**/*config*.ini
+
+# 環境変数ファイル
 .env
+.env.*
 .env.local
+.environment
+*.env
 config/config.json
 config/config.local.json
 
-# Security keys
+# 認証関連ファイル
+**/credentials*
+**/secrets*
+**/keys*
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+auth.ini
+auth.json
+token.txt
+api_keys.txt
 .encryption_key
+
+# WordPress関連機密情報
+wp-config.php
+wp-config-*.php
 
 # Data files
 data/posted_works.json
