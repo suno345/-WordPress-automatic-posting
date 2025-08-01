@@ -98,35 +98,43 @@ class PostScheduleManager:
         except Exception as e:
             logger.error(f"失敗投稿データ保存エラー: {e}")
     
-    def create_immediate_schedule(self, articles: List[Dict], start_delay_minutes: int = 5) -> Dict:
+    def create_advance_schedule(self, articles: List[Dict]) -> Dict:
         """
-        即座投稿スケジュールを作成（複数記事が見つかった時の前倒し投稿用）
+        15分刻みスケジュール内での前倒し投稿予約
         
         Args:
             articles: 記事データのリスト
-            start_delay_minutes: 最初の投稿までの遅延時間（分）
             
         Returns:
             作成されたスケジュール情報
         """
         now = datetime.now()
-        start_time = now + timedelta(minutes=start_delay_minutes)
+        
+        # 今日の残り投稿可能数を確認
+        remaining_slots = self._get_remaining_daily_slots()
+        
+        # 利用可能な15分刻み時刻を計算
+        available_slots = self._calculate_next_15min_slots(len(articles), remaining_slots)
         
         created_count = 0
         schedule_info = {
-            "start_time": start_time.strftime("%Y-%m-%d %H:%M"),
             "created_at": now.isoformat(),
             "total_articles": len(articles),
             "schedule_ids": [],
-            "type": "immediate",
-            "interval_minutes": 15
+            "type": "advance_schedule",
+            "interval_minutes": 15,
+            "slots_used": [],
+            "remaining_daily_slots": remaining_slots
         }
         
-        for i, article in enumerate(articles[:3]):  # 最大3件まで
-            post_time = start_time + timedelta(minutes=15 * i)
-            
+        if not available_slots:
+            logger.warning("今日の投稿枠が満杯のため、翌日に振り分けます")
+            return self._schedule_for_tomorrow(articles, schedule_info)
+        
+        # 各記事を利用可能な15分刻み時刻に割り当て
+        for i, (article, post_time) in enumerate(zip(articles, available_slots)):
             # スケジュールIDを生成
-            schedule_id = f"immediate_{post_time.strftime('%Y%m%d_%H%M')}_{uuid.uuid4().hex[:8]}"
+            schedule_id = f"advance_{post_time.strftime('%Y%m%d_%H%M')}_{uuid.uuid4().hex[:8]}"
             
             # 予約データ作成
             schedule_entry = {
@@ -136,62 +144,128 @@ class PostScheduleManager:
                 "status": "scheduled",
                 "created_at": now.isoformat(),
                 "attempts": 0,
-                "priority": "high",  # 即時投稿は高優先度
-                "type": "immediate",
+                "priority": "high",  # 前倒し投稿は高優先度
+                "type": "advance_schedule",
                 "estimated_post_time": post_time.isoformat()
             }
             
             # スケジュールに追加
             self.schedule_data[schedule_id] = schedule_entry
             schedule_info["schedule_ids"].append(schedule_id)
+            schedule_info["slots_used"].append(post_time.strftime('%Y-%m-%d %H:%M'))
             created_count += 1
         
         # スケジュール保存
         self._save_schedule()
         
-        logger.info(f"即時投稿スケジュール作成完了: {created_count}件 (開始: {start_time.strftime('%Y-%m-%d %H:%M')})")
-        
-        # 次回の通常投稿時刻を計算して記録
-        next_regular_time = self._calculate_next_regular_posting_time(created_count)
-        schedule_info["next_regular_posting"] = next_regular_time.isoformat() if next_regular_time else None
+        logger.info(f"前倒し投稿スケジュール作成完了: {created_count}件")
+        logger.info(f"投稿予定時刻: {', '.join(schedule_info['slots_used'])}")
         
         return schedule_info
 
-    def _calculate_next_regular_posting_time(self, posts_scheduled: int) -> Optional[datetime]:
-        """
-        次回の通常投稿時刻を計算（前倒し投稿分を考慮）
-        
-        Args:
-            posts_scheduled: 前倒しでスケジュールされた投稿数
-            
-        Returns:
-            次回の通常投稿時刻
-        """
-        # 今日の予定投稿数を取得
+    def _get_remaining_daily_slots(self) -> int:
+        """今日の残り投稿可能数を計算"""
         today = datetime.now().date()
         today_posts_count = len([
             p for p in self.schedule_data.values()
             if datetime.fromisoformat(p["post_time"]).date() == today
+            and p["status"] in ["scheduled", "in_progress", "completed"]
         ])
         
-        # 1日の最大投稿数（96件）を考慮
         max_daily_posts = 96
-        remaining_slots = max_daily_posts - today_posts_count
+        return max(0, max_daily_posts - today_posts_count)
+    
+    def _calculate_next_15min_slots(self, needed_count: int, max_slots: int) -> List[datetime]:
+        """
+        次に利用可能な15分刻み時刻を計算
         
-        if remaining_slots <= 0:
-            # 今日の枠がいっぱいの場合は翌日の最初の枠
-            tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            return tomorrow
-        
-        # 次の15分刻みの時刻を計算
+        Args:
+            needed_count: 必要な投稿数
+            max_slots: 今日の最大利用可能数
+            
+        Returns:
+            利用可能な15分刻み時刻のリスト
+        """
         now = datetime.now()
-        next_quarter = now.replace(second=0, microsecond=0)
-        next_quarter += timedelta(minutes=(15 - now.minute % 15) % 15 or 15)
+        available_slots = []
         
-        return next_quarter
+        # 次の15分刻み時刻を計算
+        next_quarter = now.replace(second=0, microsecond=0)
+        minutes_to_next = (15 - now.minute % 15) % 15
+        if minutes_to_next == 0:
+            minutes_to_next = 15
+        next_quarter += timedelta(minutes=minutes_to_next)
+        
+        # 必要数分の空き枠を探す（最大で今日の残り枠まで）
+        candidate_time = next_quarter
+        max_check_slots = min(needed_count, max_slots, 96)  # 最大96枠まで
+        checked_slots = 0
+        
+        while len(available_slots) < max_check_slots and checked_slots < 96:
+            if not self._is_slot_occupied(candidate_time):
+                available_slots.append(candidate_time)
+            
+            candidate_time += timedelta(minutes=15)
+            checked_slots += 1
+            
+            # 日付が変わったら停止（今日の枠のみ）
+            if candidate_time.date() != now.date():
+                break
+        
+        logger.info(f"利用可能な15分刻み枠: {len(available_slots)}件 (必要: {needed_count}件)")
+        return available_slots
+    
+    def _is_slot_occupied(self, target_time: datetime) -> bool:
+        """指定時刻に既に予約があるかチェック"""
+        target_str = target_time.strftime('%Y-%m-%d %H:%M')
+        
+        for post_info in self.schedule_data.values():
+            if post_info["status"] in ["scheduled", "in_progress"]:
+                post_time = datetime.fromisoformat(post_info["post_time"])
+                if post_time.strftime('%Y-%m-%d %H:%M') == target_str:
+                    return True
+        return False
+    
+    def _schedule_for_tomorrow(self, articles: List[Dict], schedule_info: Dict) -> Dict:
+        """翌日への振り分けスケジュール作成"""
+        tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        
+        created_count = 0
+        for i, article in enumerate(articles):
+            post_time = tomorrow + timedelta(minutes=15 * i)
+            
+            # スケジュールIDを生成
+            schedule_id = f"tomorrow_{post_time.strftime('%Y%m%d_%H%M')}_{uuid.uuid4().hex[:8]}"
+            
+            # 予約データ作成
+            schedule_entry = {
+                "schedule_id": schedule_id,
+                "post_time": post_time.isoformat(),
+                "article_data": article,
+                "status": "scheduled",
+                "created_at": datetime.now().isoformat(),
+                "attempts": 0,
+                "priority": "normal",
+                "type": "tomorrow_schedule",
+                "estimated_post_time": post_time.isoformat()
+            }
+            
+            # スケジュールに追加
+            self.schedule_data[schedule_id] = schedule_entry
+            schedule_info["schedule_ids"].append(schedule_id)
+            schedule_info["slots_used"].append(post_time.strftime('%Y-%m-%d %H:%M'))
+            created_count += 1
+        
+        # スケジュール保存
+        self._save_schedule()
+        
+        schedule_info["type"] = "tomorrow_schedule"
+        logger.info(f"翌日投稿スケジュール作成完了: {created_count}件 (開始: {tomorrow.strftime('%Y-%m-%d %H:%M')})")
+        
+        return schedule_info
 
     def create_daily_schedule(self, articles: List[Dict], start_date: Optional[datetime] = None) -> Dict:
-        \"\"\"
+        """
         1日分の投稿スケジュールを作成
         
         Args:
@@ -200,7 +274,7 @@ class PostScheduleManager:
             
         Returns:
             作成されたスケジュール情報
-        \"\"\"
+        """
         if start_date is None:
             # 翌日の00:00から開始
             start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -245,7 +319,7 @@ class PostScheduleManager:
         return schedule_info
     
     def get_next_scheduled_post(self, time_buffer_minutes: int = 2) -> Optional[Dict]:
-        \"\"\"
+        """
         次に投稿すべき記事を取得
         
         Args:
@@ -253,7 +327,7 @@ class PostScheduleManager:
             
         Returns:
             次の投稿データまたはNone
-        \"\"\"
+        """
         now = datetime.now()
         buffer_time = now + timedelta(minutes=time_buffer_minutes)
         
@@ -288,7 +362,7 @@ class PostScheduleManager:
         return candidates[0]
     
     def mark_post_in_progress(self, schedule_id: str) -> bool:
-        \"\"\"投稿を進行中としてマーク\"\"\"
+        """投稿を進行中としてマーク"""
         if schedule_id not in self.schedule_data:
             return False
         
@@ -300,7 +374,7 @@ class PostScheduleManager:
         return True
     
     def mark_post_completed(self, schedule_id: str, post_result: Dict) -> bool:
-        \"\"\"投稿完了としてマーク\"\"\"
+        """投稿完了としてマーク"""
         if schedule_id not in self.schedule_data:
             return False
         
@@ -329,7 +403,7 @@ class PostScheduleManager:
         return True
     
     def mark_post_failed(self, schedule_id: str, error_info: str, retry: bool = True) -> bool:
-        \"\"\"投稿失敗としてマーク\"\"\"
+        """投稿失敗としてマーク"""
         if schedule_id not in self.schedule_data:
             return False
         
@@ -378,7 +452,7 @@ class PostScheduleManager:
         return True
     
     def get_schedule_status(self) -> Dict:
-        \"\"\"スケジュール状況を取得\"\"\"
+        """スケジュール状況を取得"""
         now = datetime.now()
         
         status_counts = {"scheduled": 0, "in_progress": 0, "overdue": 0}
@@ -421,7 +495,7 @@ class PostScheduleManager:
         }
     
     def _cleanup_old_schedules(self, schedule_data: Dict) -> Dict:
-        \"\"\"古いスケジュールをクリーンアップ\"\"\"
+        """古いスケジュールをクリーンアップ"""
         cutoff_date = datetime.now() - timedelta(days=2)  # 2日前より古いものを削除
         
         cleaned_data = {}
@@ -441,7 +515,7 @@ class PostScheduleManager:
         return cleaned_data
     
     def reschedule_failed_posts(self) -> int:
-        \"\"\"失敗した投稿を再スケジュール\"\"\"
+        """失敗した投稿を再スケジュール"""
         rescheduled_count = 0
         now = datetime.now()
         
@@ -486,7 +560,7 @@ class PostScheduleManager:
         return rescheduled_count
     
     def _find_next_available_slot(self) -> Optional[datetime]:
-        \"\"\"次の利用可能な時間枠を検索\"\"\"
+        """次の利用可能な時間枠を検索"""
         now = datetime.now()
         
         # 15分間隔で次の空き時間を検索

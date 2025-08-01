@@ -1,0 +1,65 @@
+{
+  "advance_20250802_0815_4ffcf359": {
+    "schedule_id": "advance_20250802_0815_4ffcf359",
+    "post_time": "2025-08-02T08:15:00",
+    "article_data": {
+      "work_data": {
+        "work_id": "test_work_1",
+        "title": "テスト作品1",
+        "circle_name": "テストサークル1",
+        "author_name": "テスト作者1",
+        "description": "これはテスト用の作品1です。"
+      },
+      "rewritten_description": "リライトされたテスト説明文1",
+      "article_content": "完全なテスト記事内容1"
+    },
+    "status": "scheduled",
+    "created_at": "2025-08-02T08:06:03.223035",
+    "attempts": 0,
+    "priority": "high",
+    "type": "advance_schedule",
+    "estimated_post_time": "2025-08-02T08:15:00"
+  },
+  "advance_20250802_0830_11db99ea": {
+    "schedule_id": "advance_20250802_0830_11db99ea",
+    "post_time": "2025-08-02T08:30:00",
+    "article_data": {
+      "work_data": {
+        "work_id": "test_work_2",
+        "title": "テスト作品2",
+        "circle_name": "テストサークル2",
+        "author_name": "テスト作者2",
+        "description": "これはテスト用の作品2です。"
+      },
+      "rewritten_description": "リライトされたテスト説明文2",
+      "article_content": "完全なテスト記事内容2"
+    },
+    "status": "scheduled",
+    "created_at": "2025-08-02T08:06:03.223035",
+    "attempts": 0,
+    "priority": "high",
+    "type": "advance_schedule",
+    "estimated_post_time": "2025-08-02T08:30:00"
+  },
+  "advance_20250802_0845_fb7b0c3f": {
+    "schedule_id": "advance_20250802_0845_fb7b0c3f",
+    "post_time": "2025-08-02T08:45:00",
+    "article_data": {
+      "work_data": {
+        "work_id": "test_work_3",
+        "title": "テスト作品3",
+        "circle_name": "テストサークル3",
+        "author_name": "テスト作者3",
+        "description": "これはテスト用の作品3です。"
+      },
+      "rewritten_description": "リライトされたテスト説明文3",
+      "article_content": "完全なテスト記事内容3"
+    },
+    "status": "scheduled",
+    "created_at": "2025-08-02T08:06:03.223035",
+    "attempts": 0,
+    "priority": "high",
+    "type": "advance_schedule",
+    "estimated_post_time": "2025-08-02T08:45:00"
+  }
+}

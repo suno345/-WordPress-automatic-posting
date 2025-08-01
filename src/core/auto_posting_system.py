@@ -226,16 +226,16 @@ class AutoPostingSystem:
         # 処理する作品を制限
         works_to_process = unposted_works[:max_posts]
         
-        # 複数作品が見つかった場合は前倒し投稿を実行
+        # 複数作品が見つかった場合は15分刻み前倒し投稿を実行
         if len(works_to_process) > 1:
-            self.logger.info(f"複数作品発見（{len(works_to_process)}件）- 前倒し投稿を実行します")
-            return self._process_works_immediate_schedule(works_to_process)
+            self.logger.info(f"複数作品発見（{len(works_to_process)}件）- 15分刻み前倒し投稿を実行します")
+            return self._process_works_advance_schedule(works_to_process)
         else:
             # 単一作品の場合は従来の処理
             return self._process_works_regular_schedule(works_to_process, total_posted_count)
 
-    def _process_works_immediate_schedule(self, works: List[Dict]) -> int:
-        """即時前倒し投稿処理"""
+    def _process_works_advance_schedule(self, works: List[Dict]) -> int:
+        """15分刻みスケジュール内前倒し投稿処理"""
         try:
             # 記事生成処理
             articles = []
@@ -262,17 +262,19 @@ class AutoPostingSystem:
                 self.logger.warning("記事生成に失敗したため投稿をスキップします")
                 return 0
             
-            # 前倒し投稿スケジュールを作成
+            # 15分刻み前倒し投稿スケジュールを作成
             from .post_schedule_manager import PostScheduleManager
             schedule_manager = PostScheduleManager(self.config)
             
-            schedule_info = schedule_manager.create_immediate_schedule(
-                articles=articles,
-                start_delay_minutes=2  # 2分後から開始
-            )
+            schedule_info = schedule_manager.create_advance_schedule(articles=articles)
             
-            self.logger.info(f"前倒し投稿スケジュール作成: {len(articles)}件")
-            self.logger.info(f"投稿予定時刻: {schedule_info['start_time']}から15分間隔")
+            # 結果に応じたログ出力
+            if schedule_info["type"] == "advance_schedule":
+                self.logger.info(f"前倒し投稿スケジュール作成: {len(articles)}件")
+                self.logger.info(f"投稿予定時刻: {', '.join(schedule_info['slots_used'])}")
+            elif schedule_info["type"] == "tomorrow_schedule":
+                self.logger.info(f"今日の投稿枠満杯のため翌日振り分け: {len(articles)}件")
+                self.logger.info(f"翌日投稿予定時刻: {', '.join(schedule_info['slots_used'])}")
             
             # 投稿済みとして記録
             for article in articles:
