@@ -203,14 +203,14 @@ class AutoPostingSystem:
             post_data = self.article_gen.prepare_post_data(work_data, rewritten_description)
             
             # カテゴリーとタグの処理
-            category_id = self._get_category_id(post_data['category'])
+            category_ids = self._get_category_ids(post_data['category'])
             tag_ids = self._get_tag_ids(post_data['tags'])
             
             # 投稿時刻の計算
             post_time = tomorrow + timedelta(minutes=self.config.system.post_interval * posted_count)
             
             # WordPress投稿
-            post_id = self._create_wordpress_post(post_data, category_id, tag_ids, post_time)
+            post_id = self._create_wordpress_post(post_data, category_ids, tag_ids, post_time)
             
             if post_id:
                 # 投稿成功
@@ -241,23 +241,29 @@ class AutoPostingSystem:
         
         return rewritten_description
     
-    def _get_category_id(self, category_name) -> Optional[int]:
-        """カテゴリーIDを取得"""
-        if not category_name:
-            return None
+    def _get_category_ids(self, category_names) -> List[int]:
+        """複数カテゴリーIDを取得"""
+        category_ids = []
         
-        # リストが渡された場合は最初の要素を使用（安全性のため）
-        if isinstance(category_name, list):
-            if len(category_name) > 0:
-                category_name = category_name[0]
-            else:
-                return None
+        if not category_names:
+            return []
         
-        # 文字列でない場合は文字列化
-        if not isinstance(category_name, str):
-            category_name = str(category_name)
+        # リストでない場合はリスト化
+        if not isinstance(category_names, list):
+            category_names = [category_names]
         
-        return self.wp_api.get_or_create_category(category_name)
+        for category_name in category_names:
+            # 文字列でない場合は文字列化
+            if not isinstance(category_name, str):
+                category_name = str(category_name)
+            
+            # 空文字列や不正な値をスキップ
+            if category_name and category_name.strip():
+                category_id = self.wp_api.get_or_create_category(category_name.strip())
+                if category_id:
+                    category_ids.append(category_id)
+        
+        return category_ids
     
     def _get_tag_ids(self, tag_names) -> List[int]:
         """タグIDリストを取得"""
@@ -286,14 +292,14 @@ class AutoPostingSystem:
     def _create_wordpress_post(
         self, 
         post_data: Dict, 
-        category_id: Optional[int], 
+        category_ids: List[int], 
         tag_ids: List[int], 
         post_time: datetime
     ) -> Optional[int]:
         """WordPress投稿を作成"""
         self.logger.info(f"WordPressに投稿中: {post_data['title']}")
         
-        categories = [category_id] if category_id else []
+        categories = category_ids if category_ids else []
         
         return self.wp_api.create_post(
             title=post_data['title'],

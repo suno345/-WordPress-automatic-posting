@@ -271,13 +271,14 @@ class ArticleGenerator:
         # タグの準備
         tags = self._prepare_tags(work_data)
         
-        # カテゴリー（最初のジャンルを使用、なければデフォルト）
-        category = DefaultValues.DEFAULT_CATEGORY  # デフォルト: '同人'
+        # カテゴリー（全てのジャンルを使用、なければデフォルト）
         genres = work_data.get('genres', [])
         if genres and len(genres) > 0:
-            category = genres[0]  # 最初のジャンルを文字列として使用
+            category = genres  # 全てのジャンルをリストとして使用
         elif work_data.get('category'):
-            category = work_data.get('category')
+            category = [work_data.get('category')]  # 単一カテゴリもリスト化
+        else:
+            category = [DefaultValues.DEFAULT_CATEGORY]  # デフォルト: ['同人']
         
         return {
             'title': title,
