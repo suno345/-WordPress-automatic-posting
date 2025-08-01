@@ -69,6 +69,9 @@ class AutoPostingSystem:
                 request_delay=self.config.system.request_delay
             )
             
+            # 改善：ジャンル情報キャッシュを初期化（GenreSearch API活用）
+            self.dmm_client.initialize_genre_cache()
+            
             # Gemini APIクライアント
             self.gemini = GeminiAPI(api_key=self.config.gemini.api_key)
             

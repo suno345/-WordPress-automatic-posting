@@ -25,6 +25,12 @@ class DMMAPIClient(SessionMixin):
         self.max_workers = max_workers
         self._review_cache = {}  # レビュー情報キャッシュ
         self._cache_lock = threading.Lock()  # キャッシュアクセス用ロック
+        
+        # ジャンル情報キャッシュ
+        self.genre_cache = {}
+        self.male_genre_ids = set()
+        self.female_genre_ids = set()
+        
         self._load_config()
         
     def _load_config(self) -> None:
@@ -100,13 +106,12 @@ class DMMAPIClient(SessionMixin):
             '[data-review-count]'
         ]
         
-    def get_items(self, limit: int = 20, offset: int = 1) -> List[Dict]:
+    def get_items(self, limit: int = 20, offset: int = 1, use_genre_filter: bool = True) -> List[Dict]:
         """商品一覧を取得（新着順の同人コミック）"""
         try:
             time.sleep(self.request_delay)
             
-            # 同人作品取得用パラメータ（APIレベルでのフィルタリングは困難なため、
-            # アプリケーション層のis_comic_workメソッドでコミック作品のみを抽出）
+            # 基本パラメータ
             params = {
                 'api_id': self.api_id,
                 'affiliate_id': self.affiliate_id,
@@ -117,8 +122,21 @@ class DMMAPIClient(SessionMixin):
                 'offset': offset,
                 'sort': 'date',              # 新着順
                 'output': 'json'
-                # article/article_idパラメータは削除（効果的でないため）
             }
+            
+            # 改善：男性向けジャンルフィルターを適用
+            if use_genre_filter:
+                male_genre_ids = self.get_male_genre_ids()
+                if male_genre_ids:
+                    # 最初の男性向けジャンルIDを使用（複数指定は非対応のため）
+                    params.update({
+                        'article': 'genre',
+                        'article_id': male_genre_ids[0]
+                    })
+                    logger.debug(f"男性向けジャンルフィルター適用: {male_genre_ids[0]}")
+            
+            # 改善：女性向けキーワード除外
+            params['keyword'] = '-BL -女性向け -乙女 -TL'
             
             # affiliate_idが空の場合は除外
             if not self.affiliate_id:
@@ -250,6 +268,93 @@ class DMMAPIClient(SessionMixin):
         
         # デフォルトは男性向けとして扱う（同人コミックの大部分が男性向けのため）
         return True
+    
+    def initialize_genre_cache(self) -> bool:
+        """ジャンル情報をキャッシュに読み込み"""
+        try:
+            # GenreSearch APIでジャンル情報を取得
+            genre_data = self._fetch_genre_list()
+            if not genre_data:
+                logger.warning("ジャンル情報の取得に失敗しました")
+                return False
+            
+            # ジャンル情報を分析してキャッシュに保存
+            self._analyze_and_cache_genres(genre_data)
+            
+            logger.info(f"ジャンル情報キャッシュを初期化: 男性向け{len(self.male_genre_ids)}件, 女性向け{len(self.female_genre_ids)}件")
+            return True
+            
+        except Exception as e:
+            logger.error(f"ジャンルキャッシュ初期化エラー: {e}")
+            return False
+    
+    def _fetch_genre_list(self) -> List[Dict]:
+        """GenreSearch APIでジャンル一覧を取得"""
+        params = {
+            'api_id': self.api_id,
+            'affiliate_id': self.affiliate_id,
+            'floor_id': '81',  # digital_doujin
+            'hits': 500,
+            'output': 'json'
+        }
+        
+        try:
+            response = self.session.get(f"{self.api_base_url}/GenreSearch", params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get('result', {}).get('status', 0) == 200:
+                return data.get('result', {}).get('genre', [])
+            else:
+                logger.error(f"GenreSearch API error: {data}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"GenreSearch API request failed: {e}")
+            return []
+    
+    def _analyze_and_cache_genres(self, genre_data: List[Dict]) -> None:
+        """ジャンル情報を分析してキャッシュに保存"""
+        # 女性向けジャンルのキーワード
+        female_keywords = [
+            '女性向け', 'BL', 'ボーイズラブ', '乙女', 'TL', 'ティーンズラブ',
+            '少女', 'レディース', '恋愛', 'ラブロマンス', '腐女子'
+        ]
+        
+        # 男性向けジャンルのキーワード
+        male_keywords = [
+            '男性向け', '成人向け', 'アダルト', 'エロ', '青年向け',
+            '大人向け', 'R18', '18禁', 'エッチ', 'Hな'
+        ]
+        
+        for genre in genre_data:
+            genre_id = genre.get('genre_id', '')
+            genre_name = genre.get('name', '')
+            
+            # ジャンル情報をキャッシュに保存
+            self.genre_cache[genre_id] = {
+                'name': genre_name,
+                'ruby': genre.get('ruby', ''),
+                'list_url': genre.get('list_url', '')
+            }
+            
+            # 女性向け判定
+            if any(keyword in genre_name for keyword in female_keywords):
+                self.female_genre_ids.add(genre_id)
+                logger.debug(f"女性向けジャンル登録: {genre_name} (ID: {genre_id})")
+            
+            # 男性向け判定
+            elif any(keyword in genre_name for keyword in male_keywords):
+                self.male_genre_ids.add(genre_id)
+                logger.debug(f"男性向けジャンル登録: {genre_name} (ID: {genre_id})")
+    
+    def get_male_genre_ids(self) -> List[str]:
+        """男性向けジャンルIDのリストを取得"""
+        if not self.male_genre_ids and not self.genre_cache:
+            # キャッシュが空の場合は初期化を試行
+            self.initialize_genre_cache()
+        
+        return list(self.male_genre_ids)
     
     def get_reviewed_works(self, target_count: int = 5, max_check: int = 100) -> List[Dict]:
         """レビュー付きの作品を指定数見つけるまで検索"""
