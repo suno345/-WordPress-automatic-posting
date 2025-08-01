@@ -123,68 +123,81 @@ class DMMAPIClient(SessionMixin):
                 
                 # 基本パラメータ
                 params = {
-                'api_id': self.api_id,
-                'affiliate_id': self.affiliate_id,
-                'site': 'FANZA',
-                'service': 'doujin',         # 同人サービス
-                'floor': 'digital_doujin',   # 同人フロア
-                'hits': limit,
-                'offset': offset,
-                'sort': 'date',              # 新着順
-                'output': 'json'
-            }
-            
-            # 改善：男性向けジャンルフィルターを適用
-            if use_genre_filter:
-                male_genre_ids = self.get_male_genre_ids()
-                if male_genre_ids:
-                    # 最初の男性向けジャンルIDを使用（複数指定は非対応のため）
-                    params.update({
-                        'article': 'genre',
-                        'article_id': male_genre_ids[0]
-                    })
-                    logger.debug(f"男性向けジャンルフィルター適用: {male_genre_ids[0]}")
-            
-            # 改善：女性向けキーワード除外
-            params['keyword'] = '-BL -女性向け -乙女 -TL'
-            
-            # affiliate_idが空の場合は除外
-            if not self.affiliate_id:
-                del params['affiliate_id']
-            
-            response = self.session.get(
-                f"{self.api_base_url}/ItemList",
-                params=params
-            )
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            if data.get('result', {}).get('status') != 200:
-                logger.error(f"API Error: {data.get('result', {}).get('message', 'Unknown error')}")
-                logger.error(f"API Response: {data}")  # デバッグ用にレスポンス全体をログ出力
-                return []
-            
-            items = data.get('result', {}).get('items', [])
-            logger.info(f"Retrieved {len(items)} items from DMM API")
-            
-            # デバッグ用：最初のアイテムの構造をログ出力
-            if items:
-                logger.info(f"First item type: {type(items[0])}")
-                logger.info(f"First item sample: {str(items[0])[:200]}...")
-            
-            return items
-            
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP Error from DMM API: {e}")
-            try:
-                error_data = e.response.json()
-                logger.error(f"Error Response: {error_data}")
-            except:
-                logger.error(f"Error Response Text: {e.response.text}")
-            return []
-        except Exception as e:
-            logger.error(f"Error fetching items from DMM API: {e}")
+                    'api_id': self.api_id,
+                    'affiliate_id': self.affiliate_id,
+                    'site': 'FANZA',
+                    'service': 'doujin',         # 同人サービス
+                    'floor': 'digital_doujin',   # 同人フロア
+                    'hits': limit,
+                    'offset': offset,
+                    'sort': 'date',              # 新着順
+                    'output': 'json'
+                }
+                
+                # 改善：男性向けジャンルフィルターを適用
+                if use_genre_filter:
+                    male_genre_ids = self.get_male_genre_ids()
+                    if male_genre_ids:
+                        # 最初の男性向けジャンルIDを使用（複数指定は非対応のため）
+                        params.update({
+                            'article': 'genre',
+                            'article_id': male_genre_ids[0]
+                        })
+                        logger.debug(f"男性向けジャンルフィルター適用: {male_genre_ids[0]}")
+                
+                # 改善：女性向けキーワード除外
+                params['keyword'] = '-BL -女性向け -乙女 -TL'
+                
+                # affiliate_idが空の場合は除外
+                if not self.affiliate_id:
+                    del params['affiliate_id']
+                
+                response = self.session.get(
+                    f"{self.api_base_url}/ItemList",
+                    params=params
+                )
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                if data.get('result', {}).get('status') != 200:
+                    logger.error(f"API Error: {data.get('result', {}).get('message', 'Unknown error')}")
+                    logger.error(f"API Response: {data}")  # デバッグ用にレスポンス全体をログ出力
+                    return []
+                
+                items = data.get('result', {}).get('items', [])
+                logger.info(f"Retrieved {len(items)} items from DMM API")
+                
+                # デバッグ用：最初のアイテムの構造をログ出力
+                if items:
+                    logger.info(f"First item type: {type(items[0])}")
+                    logger.info(f"First item sample: {str(items[0])[:200]}...")
+                
+                return items
+                
+            except requests.exceptions.HTTPError as e:
+                logger.error(f"HTTP Error from DMM API: {e}")
+                last_error = e
+                try:
+                    error_data = e.response.json()
+                    logger.error(f"Error Response: {error_data}")
+                except:
+                    logger.error(f"Error Response Text: {e.response.text}")
+                    
+            except Exception as e:
+                logger.error(f"Error fetching items from DMM API: {e}")
+                last_error = e
+                
+            # インテリジェントリトライ処理
+            if hasattr(self, 'error_handler'):
+                delay = self.error_handler.handle_error(last_error, attempt)
+                if delay > 0:
+                    logger.info(f"Retrying after {delay} seconds (attempt {attempt + 1})")
+                    time.sleep(delay)
+                    attempt += 1
+                    continue
+                    
+            logger.error(f"Failed to fetch items after {attempt} attempts")
             return []
     
     def is_comic_work(self, api_item: Dict) -> bool:

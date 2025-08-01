@@ -4,33 +4,82 @@ __pycache__/
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
 env/
 venv/
 ENV/
 .venv
+env.bak/
+venv.bak/
 
-# 設定ファイル
-config.ini
+# Environment variables
 .env
+.env.local
+config/config.json
+config/config.local.json
 
-# データファイル
+# Data files
 data/posted_works.json
 
-# ログファイル
+# Logs
 logs/
 *.log
+
+# Cache
+cache/
+test_cache/
+temp/
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# テスト
-.pytest_cache/
-.coverage
-htmlcov/
+# Temporary files
+*.tmp
+*.temp
+
+# Documentation builds
+docs/_build/
