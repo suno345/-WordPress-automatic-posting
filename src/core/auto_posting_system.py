@@ -24,18 +24,20 @@ logger = logging.getLogger(__name__)
 class AutoPostingSystem:
     """WordPress自動投稿システム（リファクタリング版）"""
     
-    def __init__(self, config_file: str = 'config/config.ini', verbose: bool = False):
+    def __init__(self, config_file: str = 'config/config.ini', verbose: bool = False, skip_review_check: bool = False):
         """
         自動投稿システムの初期化
         
         Args:
             config_file: 設定ファイルのパス
             verbose: 詳細ログを出力するか
+            skip_review_check: レビューチェックをスキップするか（テスト用）
         
         Raises:
             ConfigurationError: 設定に問題がある場合
         """
         self.verbose = verbose
+        self.skip_review_check = skip_review_check
         try:
             # 設定を読み込み
             self.config = ConfigManager(config_file)
@@ -139,7 +141,7 @@ class AutoPostingSystem:
         # 作品データに変換
         work_list = []
         for item in api_items:
-            work_data = self.dmm_client.convert_to_work_data(item)
+            work_data = self.dmm_client.convert_to_work_data(item, skip_review_check=self.skip_review_check)
             if work_data:
                 work_list.append(work_data)
         

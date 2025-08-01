@@ -52,6 +52,12 @@ def parse_arguments():
         help='詳細ログを出力'
     )
     
+    parser.add_argument(
+        '--skip-review-check',
+        action='store_true',
+        help='レビューチェックをスキップ（テスト用）'
+    )
+    
     return parser.parse_args()
 
 
@@ -64,7 +70,8 @@ def main():
         # システムの初期化
         system = AutoPostingSystem(
             config_file=args.config,
-            verbose=args.verbose
+            verbose=args.verbose,
+            skip_review_check=getattr(args, 'skip_review_check', False)
         )
         
         # 実行モードに応じた処理

@@ -143,18 +143,55 @@ class DMMAPIClient(SessionMixin):
             review_count = 0
             review_average = 0.0
             
-            # FANZA商品ページのレビュー要素を探す
-            review_elements = soup.find_all(['span', 'div'], class_=lambda x: x and 'review' in x.lower())
+            # FANZA商品ページのレビュー要素を探す（複数パターンで検索）
+            import re
             
-            for element in review_elements:
-                text = element.get_text().strip()
-                # レビュー数のパターンを探す（例：「レビュー（5件）」）
-                if '件' in text and ('レビュー' in text or 'review' in text.lower()):
-                    import re
-                    numbers = re.findall(r'(\d+)', text)
-                    if numbers:
-                        review_count = int(numbers[0])
+            # パターン1: レビュー数の直接検索
+            review_patterns = [
+                r'レビュー\s*[（(]\s*(\d+)\s*件',  # レビュー（5件）
+                r'レビュー\s*:\s*(\d+)\s*件',      # レビュー: 5件
+                r'レビュー\s*(\d+)\s*件',          # レビュー5件
+                r'評価\s*[（(]\s*(\d+)\s*件',      # 評価（5件）
+                r'口コミ\s*[（(]\s*(\d+)\s*件',     # 口コミ（5件）
+            ]
+            
+            # 全テキストを取得して検索
+            page_text = soup.get_text()
+            for pattern in review_patterns:
+                matches = re.findall(pattern, page_text)
+                if matches:
+                    review_count = int(matches[0])
+                    logger.info(f"Found review count using pattern '{pattern}': {review_count}")
+                    break
+            
+            # パターン2: HTML要素から検索
+            if review_count == 0:
+                review_selectors = [
+                    '[class*="review"]',
+                    '[class*="評価"]',
+                    '[data-testid*="review"]',
+                    '.review-count',
+                    '.rating-count'
+                ]
+                
+                for selector in review_selectors:
+                    elements = soup.select(selector)
+                    for element in elements:
+                        text = element.get_text().strip()
+                        numbers = re.findall(r'(\d+)', text)
+                        if numbers and ('件' in text or 'count' in text.lower()):
+                            review_count = int(numbers[0])
+                            logger.info(f"Found review count using selector '{selector}': {review_count}")
+                            break
+                    if review_count > 0:
                         break
+            
+            # デバッグ: レビューが見つからない場合、ページ内容を少し出力
+            if review_count == 0:
+                logger.debug(f"No reviews found for {product_url}")
+                # ページの一部テキストを確認（デバッグ用）
+                sample_text = page_text[:500] if len(page_text) > 500 else page_text
+                logger.debug(f"Sample page text: {sample_text}")
             
             # 星評価を取得
             star_elements = soup.find_all(['span', 'div'], class_=lambda x: x and ('star' in str(x).lower() or 'rating' in str(x).lower()))
@@ -176,36 +213,40 @@ class DMMAPIClient(SessionMixin):
             logger.warning(f"Failed to get review info from {product_url}: {e}")
             return {'count': 0, 'average': 0.0, 'has_reviews': False}
     
-    def convert_to_work_data(self, api_item: Dict) -> Dict:
+    def convert_to_work_data(self, api_item: Dict, skip_review_check: bool = False) -> Dict:
         """API レスポンスを内部データ形式に変換"""
         try:
             # コミック作品のみを対象とする
             if not self.is_comic_work(api_item):
                 return None
             
-            # レビュー情報の確認
-            # APIレスポンスにレビュー情報が含まれていない場合、商品ページからスクレイピング
+            # レビュー情報の確認（スキップオプションがある場合は確認しない）
             has_reviews = False
-            if 'review' in api_item and api_item.get('review', {}).get('count', 0) > 0:
-                has_reviews = True
+            if not skip_review_check:
+                # APIレスポンスにレビュー情報が含まれていない場合、商品ページからスクレイピング
+                if 'review' in api_item and api_item.get('review', {}).get('count', 0) > 0:
+                    has_reviews = True
+                else:
+                    # 商品ページからレビュー情報を取得
+                    product_url = api_item.get('URL', '')
+                    if product_url:
+                        review_info = self.get_review_info_from_page(product_url)
+                        has_reviews = review_info['has_reviews']
+                        
+                        # レビュー情報をapi_itemに追加
+                        if has_reviews:
+                            api_item['review'] = {
+                                'count': review_info['count'],
+                                'average': review_info['average']
+                            }
+                
+                # レビューがない作品はスキップ
+                if not has_reviews:
+                    logger.info(f"Skipping work without reviews: {api_item.get('title', 'Unknown')}")
+                    return None
             else:
-                # 商品ページからレビュー情報を取得
-                product_url = api_item.get('URL', '')
-                if product_url:
-                    review_info = self.get_review_info_from_page(product_url)
-                    has_reviews = review_info['has_reviews']
-                    
-                    # レビュー情報をapi_itemに追加
-                    if has_reviews:
-                        api_item['review'] = {
-                            'count': review_info['count'],
-                            'average': review_info['average']
-                        }
-            
-            # レビューがない作品はスキップ
-            if not has_reviews:
-                logger.info(f"Skipping work without reviews: {api_item.get('title', 'Unknown')}")
-                return None
+                logger.info(f"Skipping review check for: {api_item.get('title', 'Unknown')}")
+                has_reviews = True  # レビューチェックをスキップする場合は通す
             # ジャンル情報の抽出
             genres = []
             if 'iteminfo' in api_item and 'genre' in api_item['iteminfo']:
