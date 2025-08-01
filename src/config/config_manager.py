@@ -37,6 +37,7 @@ class SystemConfig:
     """システム設定"""
     log_level: str
     max_posts_per_run: int
+    search_limit: int
     request_delay: int
     post_interval: int
 
@@ -122,17 +123,20 @@ class ConfigManager:
             section = self._config['settings']
             log_level = section.get('log_level', DefaultValues.LOG_LEVEL)
             max_posts_per_run = section.getint('max_posts_per_run', Constants.MAX_POSTS_PER_RUN)
+            search_limit = section.getint('search_limit', Constants.SEARCH_LIMIT)
             request_delay = section.getint('request_delay', Constants.REQUEST_DELAY)
             post_interval = section.getint('post_interval', Constants.POST_INTERVAL_MINUTES)
         else:
             log_level = DefaultValues.LOG_LEVEL
             max_posts_per_run = Constants.MAX_POSTS_PER_RUN
+            search_limit = Constants.SEARCH_LIMIT
             request_delay = Constants.REQUEST_DELAY
             post_interval = Constants.POST_INTERVAL_MINUTES
         
         return SystemConfig(
             log_level=log_level,
             max_posts_per_run=max_posts_per_run,
+            search_limit=search_limit,
             request_delay=request_delay,
             post_interval=post_interval
         )

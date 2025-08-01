@@ -15,6 +15,7 @@ class Constants:
     
     # 投稿関連
     MAX_POSTS_PER_RUN: Final[int] = 1
+    SEARCH_LIMIT: Final[int] = 100
     POST_INTERVAL_MINUTES: Final[int] = 15
     DEFAULT_TARGET_LENGTH: Final[int] = 180
     

@@ -133,7 +133,7 @@ class AutoPostingSystem:
         """作品データを取得"""
         self.logger.info("DMM API から作品リストを取得中...")
         
-        api_items = self.dmm_client.get_items(limit=50)
+        api_items = self.dmm_client.get_items(limit=self.config.system.search_limit)
         
         if not api_items:
             return []
