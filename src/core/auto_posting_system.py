@@ -301,13 +301,17 @@ class AutoPostingSystem:
         
         categories = category_ids if category_ids else []
         
+        # 商品IDをスラッグとして使用
+        slug = post_data.get('work_id', None)
+        
         return self.wp_api.create_post(
             title=post_data['title'],
             content=post_data['content'],
             categories=categories,
             tags=tag_ids,
             status='future',
-            scheduled_date=post_time
+            scheduled_date=post_time,
+            slug=slug
         )
     
     def _calculate_tomorrow(self) -> datetime:
