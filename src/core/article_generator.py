@@ -208,14 +208,14 @@ class ArticleGenerator:
         
         sections = ['<h3>サンプル画像</h3>']
         
-        # 最大件数まで画像を追加
-        for img_url in sample_images[:Constants.MAX_SAMPLE_IMAGES]:
+        # 全てのサンプル画像を追加
+        for img_url in sample_images:
             proxied_url = self._get_proxied_image_url(img_url)
             sections.append(
                 f'<img src="{proxied_url}" alt="{title} サンプル画像" class="aligncenter size-full" />'
             )
         
-        logger.info(f"Added {min(len(sample_images), Constants.MAX_SAMPLE_IMAGES)} sample images for {title}")
+        logger.info(f"Added {len(sample_images)} sample images for {title}")
         
         return sections
     
