@@ -161,20 +161,29 @@ class DMMAPIClient(SessionMixin):
     
     def is_comic_work(self, api_item: Dict) -> bool:
         """コミック作品かどうかを判定"""
-        # imageURLのパスにcomicが含まれているかチェック
+        # imageURLのパスでコミック作品を判定（最も確実な方法）
         if 'imageURL' in api_item and 'large' in api_item['imageURL']:
             image_url = api_item['imageURL']['large']
-            if '/comic/' in image_url:
+            # コミック作品の場合は /digital/comic/ パスを含む
+            if '/digital/comic/' in image_url:
                 return True
+            # ゲーム作品の場合は /digital/game/ パスを含むので除外
+            if '/digital/game/' in image_url:
+                return False
         
-        # ジャンルにコミック関連のものが含まれているかチェック
+        # ジャンルで判定（補助的）
         if 'iteminfo' in api_item and 'genre' in api_item['iteminfo']:
             for genre in api_item['iteminfo']['genre']:
-                genre_name = genre.get('name', '').lower()
+                genre_name = genre.get('name', '')
+                # ゲーム系ジャンルは除外
+                if 'ロールプレイング' in genre_name or 'RPG' in genre_name:
+                    return False
+                # コミック系ジャンルは通す
                 if 'コミック' in genre_name or 'マンガ' in genre_name or '漫画' in genre_name:
                     return True
         
-        return True  # デフォルトでは全て通す
+        # 判定できない場合はコミック作品でないとみなす（安全側に）
+        return False
     
     def get_reviewed_works(self, target_count: int = 5, max_check: int = 100) -> List[Dict]:
         """レビュー付きの作品を指定数見つけるまで検索"""

@@ -45,21 +45,30 @@ class TestDMMAPIClient:
         # コミック作品の場合
         comic_item = {
             'imageURL': {
-                'large': 'https://example.com/comic/image.jpg'
+                'large': 'https://doujin-assets.dmm.co.jp/digital/comic/d_123456/d_123456pl.jpg'
             }
         }
         assert client.is_comic_work(comic_item) is True
 
-        # コミック作品でない場合
-        non_comic_item = {
+        # ゲーム作品の場合
+        game_item = {
             'imageURL': {
-                'large': 'https://example.com/video/image.jpg'
+                'large': 'https://doujin-assets.dmm.co.jp/digital/game/d_123456/d_123456pl.jpg'
             }
         }
-        assert client.is_comic_work(non_comic_item) is True  # デフォルトでTrue
+        assert client.is_comic_work(game_item) is False
+
+        # 判定できない場合
+        unknown_item = {
+            'imageURL': {
+                'large': 'https://example.com/unknown/image.jpg'
+            }
+        }
+        assert client.is_comic_work(unknown_item) is False
 
     def test_is_comic_work_with_genre(self, client):
         """コミック作品判定テスト（ジャンルによる判定）"""
+        # コミック系ジャンルの場合
         comic_item = {
             'iteminfo': {
                 'genre': [
@@ -69,6 +78,17 @@ class TestDMMAPIClient:
             }
         }
         assert client.is_comic_work(comic_item) is True
+
+        # ゲーム系ジャンルの場合
+        game_item = {
+            'iteminfo': {
+                'genre': [
+                    {'name': 'ロールプレイング'},
+                    {'name': 'その他'}
+                ]
+            }
+        }
+        assert client.is_comic_work(game_item) is False
 
     def test_get_review_info_from_page_cached(self, client):
         """キャッシュ機能付きレビュー情報取得テスト"""
