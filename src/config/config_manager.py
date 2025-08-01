@@ -6,9 +6,9 @@ import os
 from typing import Dict, Any
 from dataclasses import dataclass
 
-from .constants import Constants, ErrorMessages, DefaultValues
-from .exceptions import ConfigurationError
-from .utils import validate_required_config
+from ..utils.constants import Constants, ErrorMessages, DefaultValues
+from ..services.exceptions import ConfigurationError
+from ..utils.utils import validate_required_config
 
 
 @dataclass
@@ -139,7 +139,7 @@ class ConfigManager:
     
     def get_config_summary(self) -> Dict[str, Any]:
         """設定の要約を取得（デバッグ用）"""
-        from .security_utils import SecretSanitizer
+        from ..services.security_utils import SecretSanitizer
         
         return {
             'wordpress': {

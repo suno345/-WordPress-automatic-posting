@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
-from .resource_manager import SessionMixin
+from ..services.resource_manager import SessionMixin
 
 logger = logging.getLogger(__name__)
 
