@@ -241,21 +241,45 @@ class AutoPostingSystem:
         
         return rewritten_description
     
-    def _get_category_id(self, category_name: str) -> Optional[int]:
+    def _get_category_id(self, category_name) -> Optional[int]:
         """カテゴリーIDを取得"""
         if not category_name:
             return None
         
+        # リストが渡された場合は最初の要素を使用（安全性のため）
+        if isinstance(category_name, list):
+            if len(category_name) > 0:
+                category_name = category_name[0]
+            else:
+                return None
+        
+        # 文字列でない場合は文字列化
+        if not isinstance(category_name, str):
+            category_name = str(category_name)
+        
         return self.wp_api.get_or_create_category(category_name)
     
-    def _get_tag_ids(self, tag_names: List[str]) -> List[int]:
+    def _get_tag_ids(self, tag_names) -> List[int]:
         """タグIDリストを取得"""
         tag_ids = []
         
+        # リストでない場合はリスト化
+        if not isinstance(tag_names, list):
+            if tag_names:
+                tag_names = [tag_names]
+            else:
+                return []
+        
         for tag_name in tag_names:
-            tag_id = self.wp_api.get_or_create_tag(tag_name)
-            if tag_id:
-                tag_ids.append(tag_id)
+            # 文字列でない場合は文字列化
+            if not isinstance(tag_name, str):
+                tag_name = str(tag_name)
+            
+            # 空文字列や不正な値をスキップ
+            if tag_name and tag_name.strip():
+                tag_id = self.wp_api.get_or_create_tag(tag_name.strip())
+                if tag_id:
+                    tag_ids.append(tag_id)
         
         return tag_ids
     
