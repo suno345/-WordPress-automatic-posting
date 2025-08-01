@@ -215,21 +215,83 @@ class AutoPostingSystem:
         return unposted_works
     
     def _process_works(self, unposted_works: List[Dict]) -> int:
-        """作品リストを処理して投稿"""
+        """作品リストを処理して投稿（前倒し投稿対応）"""
         # 既存の投稿済み件数を取得（重要な修正）
         total_posted_count = self.post_manager.get_posted_count()
         self.logger.info(f"既存投稿済み件数: {total_posted_count}件")
         
         session_posted_count = 0  # このセッションでの投稿件数
         max_posts = self.config.system.max_posts_per_run
-        tomorrow = self._calculate_tomorrow()
         
         # 処理する作品を制限
         works_to_process = unposted_works[:max_posts]
         
-        for i, work_data in enumerate(works_to_process):
+        # 複数作品が見つかった場合は前倒し投稿を実行
+        if len(works_to_process) > 1:
+            self.logger.info(f"複数作品発見（{len(works_to_process)}件）- 前倒し投稿を実行します")
+            return self._process_works_immediate_schedule(works_to_process)
+        else:
+            # 単一作品の場合は従来の処理
+            return self._process_works_regular_schedule(works_to_process, total_posted_count)
+
+    def _process_works_immediate_schedule(self, works: List[Dict]) -> int:
+        """即時前倒し投稿処理"""
+        try:
+            # 記事生成処理
+            articles = []
+            for work_data in works:
+                try:
+                    # 紹介文のリライト
+                    rewritten_description = self._rewrite_description(work_data)
+                    
+                    # 記事データの準備
+                    article_data = {
+                        "work_data": work_data,
+                        "rewritten_description": rewritten_description,
+                        "article_content": self.article_gen.generate_complete_article(work_data, rewritten_description)
+                    }
+                    articles.append(article_data)
+                    
+                    self.logger.info(f"記事生成完了: {work_data['title']}")
+                    
+                except Exception as e:
+                    self.logger.error(f"記事生成エラー: {work_data['title']} - {e}")
+                    continue
+            
+            if not articles:
+                self.logger.warning("記事生成に失敗したため投稿をスキップします")
+                return 0
+            
+            # 前倒し投稿スケジュールを作成
+            from .post_schedule_manager import PostScheduleManager
+            schedule_manager = PostScheduleManager(self.config)
+            
+            schedule_info = schedule_manager.create_immediate_schedule(
+                articles=articles,
+                start_delay_minutes=2  # 2分後から開始
+            )
+            
+            self.logger.info(f"前倒し投稿スケジュール作成: {len(articles)}件")
+            self.logger.info(f"投稿予定時刻: {schedule_info['start_time']}から15分間隔")
+            
+            # 投稿済みとして記録
+            for article in articles:
+                self.post_manager.mark_as_posted(article["work_data"]["work_id"])
+            
+            return len(articles)
+            
+        except Exception as e:
+            self.logger.error(f"前倒し投稿処理エラー: {e}")
+            return 0
+
+    def _process_works_regular_schedule(self, works: List[Dict], total_posted_count: int) -> int:
+        """通常の投稿スケジュール処理"""
+        session_posted_count = 0
+        tomorrow = self._calculate_tomorrow()
+        
+        for i, work_data in enumerate(works):
             try:
-                self.logger.info(f"作品を処理中 ({i+1}/{len(works_to_process)}): {work_data['title']}")
+                self.logger.info(f"作品を処理中 ({i+1}/{len(works)}): {work_data['title']}")
                 
                 # 全体の投稿済み件数を基準に時刻計算
                 current_posted_count = total_posted_count + session_posted_count
@@ -238,7 +300,7 @@ class AutoPostingSystem:
                     session_posted_count += 1
                 
                 # 次の処理まで待機（最後以外）
-                if i < len(works_to_process) - 1:
+                if i < len(works) - 1:
                     time.sleep(self.config.system.request_delay)
                     
             except Exception as e:

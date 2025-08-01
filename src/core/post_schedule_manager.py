@@ -98,6 +98,98 @@ class PostScheduleManager:
         except Exception as e:
             logger.error(f"失敗投稿データ保存エラー: {e}")
     
+    def create_immediate_schedule(self, articles: List[Dict], start_delay_minutes: int = 5) -> Dict:
+        """
+        即座投稿スケジュールを作成（複数記事が見つかった時の前倒し投稿用）
+        
+        Args:
+            articles: 記事データのリスト
+            start_delay_minutes: 最初の投稿までの遅延時間（分）
+            
+        Returns:
+            作成されたスケジュール情報
+        """
+        now = datetime.now()
+        start_time = now + timedelta(minutes=start_delay_minutes)
+        
+        created_count = 0
+        schedule_info = {
+            "start_time": start_time.strftime("%Y-%m-%d %H:%M"),
+            "created_at": now.isoformat(),
+            "total_articles": len(articles),
+            "schedule_ids": [],
+            "type": "immediate",
+            "interval_minutes": 15
+        }
+        
+        for i, article in enumerate(articles[:3]):  # 最大3件まで
+            post_time = start_time + timedelta(minutes=15 * i)
+            
+            # スケジュールIDを生成
+            schedule_id = f"immediate_{post_time.strftime('%Y%m%d_%H%M')}_{uuid.uuid4().hex[:8]}"
+            
+            # 予約データ作成
+            schedule_entry = {
+                "schedule_id": schedule_id,
+                "post_time": post_time.isoformat(),
+                "article_data": article,
+                "status": "scheduled",
+                "created_at": now.isoformat(),
+                "attempts": 0,
+                "priority": "high",  # 即時投稿は高優先度
+                "type": "immediate",
+                "estimated_post_time": post_time.isoformat()
+            }
+            
+            # スケジュールに追加
+            self.schedule_data[schedule_id] = schedule_entry
+            schedule_info["schedule_ids"].append(schedule_id)
+            created_count += 1
+        
+        # スケジュール保存
+        self._save_schedule()
+        
+        logger.info(f"即時投稿スケジュール作成完了: {created_count}件 (開始: {start_time.strftime('%Y-%m-%d %H:%M')})")
+        
+        # 次回の通常投稿時刻を計算して記録
+        next_regular_time = self._calculate_next_regular_posting_time(created_count)
+        schedule_info["next_regular_posting"] = next_regular_time.isoformat() if next_regular_time else None
+        
+        return schedule_info
+
+    def _calculate_next_regular_posting_time(self, posts_scheduled: int) -> Optional[datetime]:
+        """
+        次回の通常投稿時刻を計算（前倒し投稿分を考慮）
+        
+        Args:
+            posts_scheduled: 前倒しでスケジュールされた投稿数
+            
+        Returns:
+            次回の通常投稿時刻
+        """
+        # 今日の予定投稿数を取得
+        today = datetime.now().date()
+        today_posts_count = len([
+            p for p in self.schedule_data.values()
+            if datetime.fromisoformat(p["post_time"]).date() == today
+        ])
+        
+        # 1日の最大投稿数（96件）を考慮
+        max_daily_posts = 96
+        remaining_slots = max_daily_posts - today_posts_count
+        
+        if remaining_slots <= 0:
+            # 今日の枠がいっぱいの場合は翌日の最初の枠
+            tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            return tomorrow
+        
+        # 次の15分刻みの時刻を計算
+        now = datetime.now()
+        next_quarter = now.replace(second=0, microsecond=0)
+        next_quarter += timedelta(minutes=(15 - now.minute % 15) % 15 or 15)
+        
+        return next_quarter
+
     def create_daily_schedule(self, articles: List[Dict], start_date: Optional[datetime] = None) -> Dict:
         \"\"\"
         1日分の投稿スケジュールを作成
