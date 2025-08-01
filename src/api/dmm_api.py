@@ -105,7 +105,8 @@ class DMMAPIClient(SessionMixin):
         try:
             time.sleep(self.request_delay)
             
-            # 同人コミック作品取得用パラメータ
+            # 同人作品取得用パラメータ（APIレベルでのフィルタリングは困難なため、
+            # アプリケーション層のis_comic_workメソッドでコミック作品のみを抽出）
             params = {
                 'api_id': self.api_id,
                 'affiliate_id': self.affiliate_id,
@@ -115,9 +116,8 @@ class DMMAPIClient(SessionMixin):
                 'hits': limit,
                 'offset': offset,
                 'sort': 'date',              # 新着順
-                'output': 'json',
-                'article': 'genre',          # ジャンルフィルタ
-                'article_id': '156022'       # 男性向けジャンルID
+                'output': 'json'
+                # article/article_idパラメータは削除（効果的でないため）
             }
             
             # affiliate_idが空の場合は除外
