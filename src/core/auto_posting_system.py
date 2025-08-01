@@ -216,7 +216,11 @@ class AutoPostingSystem:
     
     def _process_works(self, unposted_works: List[Dict]) -> int:
         """作品リストを処理して投稿"""
-        posted_count = 0
+        # 既存の投稿済み件数を取得（重要な修正）
+        total_posted_count = self.post_manager.get_posted_count()
+        self.logger.info(f"既存投稿済み件数: {total_posted_count}件")
+        
+        session_posted_count = 0  # このセッションでの投稿件数
         max_posts = self.config.system.max_posts_per_run
         tomorrow = self._calculate_tomorrow()
         
@@ -227,8 +231,11 @@ class AutoPostingSystem:
             try:
                 self.logger.info(f"作品を処理中 ({i+1}/{len(works_to_process)}): {work_data['title']}")
                 
-                if self._process_single_work(work_data, tomorrow, posted_count):
-                    posted_count += 1
+                # 全体の投稿済み件数を基準に時刻計算
+                current_posted_count = total_posted_count + session_posted_count
+                
+                if self._process_single_work(work_data, tomorrow, current_posted_count):
+                    session_posted_count += 1
                 
                 # 次の処理まで待機（最後以外）
                 if i < len(works_to_process) - 1:
@@ -238,7 +245,7 @@ class AutoPostingSystem:
                 self.logger.error(f"作品処理中にエラーが発生: {e}", exc_info=True)
                 continue
         
-        return posted_count
+        return session_posted_count
     
     def _process_single_work(self, work_data: Dict, tomorrow: datetime, posted_count: int) -> bool:
         """
