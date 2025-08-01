@@ -7,3 +7,5 @@ python-dotenv>=1.0.0
 schedule>=1.2.0
 selenium>=4.15.0
 webdriver-manager>=4.0.0
+cryptography>=41.0.0
+bleach>=6.0.0
