@@ -160,29 +160,50 @@ class DMMAPIClient(SessionMixin):
             return []
     
     def is_comic_work(self, api_item: Dict) -> bool:
-        """コミック作品かどうかを判定"""
-        # imageURLのパスでコミック作品を判定（最も確実な方法）
+        """コミック作品のみを判定（コミック以外は全て除外）"""
+        # imageURLのパスでコミック作品を厳密に判定
         if 'imageURL' in api_item and 'large' in api_item['imageURL']:
             image_url = api_item['imageURL']['large']
-            # コミック作品の場合は /digital/comic/ パスを含む
+            
+            # コミック作品のみを許可
             if '/digital/comic/' in image_url:
                 return True
-            # ゲーム作品の場合は /digital/game/ パスを含むので除外
-            if '/digital/game/' in image_url:
-                return False
+            
+            # コミック以外は全て除外
+            excluded_paths = [
+                '/digital/game/',      # ゲーム作品
+                '/digital/cg/',        # CG集
+                '/digital/voice/',     # 音声作品
+                '/digital/video/',     # 動画作品
+                '/digital/doujin/',    # その他同人作品
+                '/digital/anime/',     # アニメ作品
+                '/digital/novel/',     # ノベル作品
+            ]
+            
+            for excluded_path in excluded_paths:
+                if excluded_path in image_url:
+                    return False
         
-        # ジャンルで判定（補助的）
+        # ジャンルで補助判定
         if 'iteminfo' in api_item and 'genre' in api_item['iteminfo']:
             for genre in api_item['iteminfo']['genre']:
                 genre_name = genre.get('name', '')
-                # ゲーム系ジャンルは除外
-                if 'ロールプレイング' in genre_name or 'RPG' in genre_name:
+                
+                # 非コミック系ジャンルは明確に除外
+                excluded_genres = [
+                    'ロールプレイング', 'RPG', 'シミュレーション', 'アクション',
+                    '動画・アニメーション', 'ボイス', '音声付き', 'ASMR',
+                    '3DCG', 'CG集', 'デジタルノベル', 'ノベル'
+                ]
+                
+                if any(excluded in genre_name for excluded in excluded_genres):
                     return False
-                # コミック系ジャンルは通す
-                if 'コミック' in genre_name or 'マンガ' in genre_name or '漫画' in genre_name:
+                
+                # コミック系ジャンルのみ許可
+                if any(comic_genre in genre_name for comic_genre in ['コミック', 'マンガ', '漫画']):
                     return True
         
-        # 判定できない場合はコミック作品でないとみなす（安全側に）
+        # 明確にコミック作品と判定できない場合は除外（厳格モード）
         return False
     
     def get_reviewed_works(self, target_count: int = 5, max_check: int = 100) -> List[Dict]:

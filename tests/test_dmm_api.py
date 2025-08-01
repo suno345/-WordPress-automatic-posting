@@ -58,6 +58,22 @@ class TestDMMAPIClient:
         }
         assert client.is_comic_work(game_item) is False
 
+        # CG集作品の場合  
+        cg_item = {
+            'imageURL': {
+                'large': 'https://doujin-assets.dmm.co.jp/digital/cg/d_123456/d_123456pl.jpg'
+            }
+        }
+        assert client.is_comic_work(cg_item) is False
+
+        # 音声作品の場合
+        voice_item = {
+            'imageURL': {
+                'large': 'https://doujin-assets.dmm.co.jp/digital/voice/d_123456/d_123456pl.jpg'
+            }
+        }
+        assert client.is_comic_work(voice_item) is False
+
         # 判定できない場合
         unknown_item = {
             'imageURL': {
@@ -89,6 +105,27 @@ class TestDMMAPIClient:
             }
         }
         assert client.is_comic_work(game_item) is False
+
+        # CG集・音声作品の場合
+        cg_item = {
+            'iteminfo': {
+                'genre': [
+                    {'name': '3DCG'},
+                    {'name': 'その他'}
+                ]
+            }
+        }
+        assert client.is_comic_work(cg_item) is False
+
+        voice_item = {
+            'iteminfo': {
+                'genre': [
+                    {'name': 'ASMR'},
+                    {'name': 'ボイス'}
+                ]
+            }
+        }
+        assert client.is_comic_work(voice_item) is False
 
     def test_get_review_info_from_page_cached(self, client):
         """キャッシュ機能付きレビュー情報取得テスト"""
