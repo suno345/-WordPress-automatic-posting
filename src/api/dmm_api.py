@@ -2,6 +2,7 @@ import requests
 import time
 import logging
 import yaml
+import hashlib
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -10,6 +11,8 @@ import threading
 from pathlib import Path
 
 from ..services.resource_manager import SessionMixin
+from ..services.cache_manager import get_cache
+from ..services.intelligent_error_handler import with_intelligent_retry, handle_api_error, record_api_success
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,9 @@ class DMMAPIClient(SessionMixin):
         self.genre_cache = {}
         self.male_genre_ids = set()
         self.female_genre_ids = set()
+        
+        # 多層キャッシュマネージャー
+        self.cache_manager = get_cache()
         
         self._load_config()
         
@@ -107,12 +113,16 @@ class DMMAPIClient(SessionMixin):
         ]
         
     def get_items(self, limit: int = 20, offset: int = 1, use_genre_filter: bool = True) -> List[Dict]:
-        """商品一覧を取得（新着順の同人コミック）"""
-        try:
-            time.sleep(self.request_delay)
-            
-            # 基本パラメータ
-            params = {
+        """商品一覧を取得（新着順の同人コミック・インテリジェントリトライ付き）"""
+        attempt = 1
+        last_error = None
+        
+        while True:
+            try:
+                time.sleep(self.request_delay)
+                
+                # 基本パラメータ
+                params = {
                 'api_id': self.api_id,
                 'affiliate_id': self.affiliate_id,
                 'site': 'FANZA',
@@ -270,9 +280,22 @@ class DMMAPIClient(SessionMixin):
         return True
     
     def initialize_genre_cache(self) -> bool:
-        """ジャンル情報をキャッシュに読み込み"""
+        """ジャンル情報をキャッシュに読み込み（多層キャッシュ活用）"""
         try:
-            # GenreSearch APIでジャンル情報を取得
+            # まず多層キャッシュから試行
+            cached_genre_data = self.cache_manager.get("genre_data", "dmm_api")
+            cached_male_ids = self.cache_manager.get("male_genre_ids", "dmm_api")
+            cached_female_ids = self.cache_manager.get("female_genre_ids", "dmm_api")
+            
+            if cached_genre_data and cached_male_ids and cached_female_ids:
+                # キャッシュから復元
+                self.genre_cache = cached_genre_data
+                self.male_genre_ids = set(cached_male_ids)
+                self.female_genre_ids = set(cached_female_ids)
+                logger.info(f"ジャンル情報をキャッシュから復元: 男性向け{len(self.male_genre_ids)}件, 女性向け{len(self.female_genre_ids)}件")
+                return True
+            
+            # キャッシュにない場合はGenreSearch APIから取得
             genre_data = self._fetch_genre_list()
             if not genre_data:
                 logger.warning("ジャンル情報の取得に失敗しました")
@@ -280,6 +303,11 @@ class DMMAPIClient(SessionMixin):
             
             # ジャンル情報を分析してキャッシュに保存
             self._analyze_and_cache_genres(genre_data)
+            
+            # 多層キャッシュに保存（24時間有効）
+            self.cache_manager.set("genre_data", self.genre_cache, "dmm_api", ttl_hours=24)
+            self.cache_manager.set("male_genre_ids", list(self.male_genre_ids), "dmm_api", ttl_hours=24)
+            self.cache_manager.set("female_genre_ids", list(self.female_genre_ids), "dmm_api", ttl_hours=24)
             
             logger.info(f"ジャンル情報キャッシュを初期化: 男性向け{len(self.male_genre_ids)}件, 女性向け{len(self.female_genre_ids)}件")
             return True
@@ -425,21 +453,22 @@ class DMMAPIClient(SessionMixin):
             return None
     
     def get_review_info_from_page_cached(self, product_url: str) -> Dict:
-        """キャッシュ機能付きレビュー情報取得"""
-        # キャッシュチェック
-        with self._cache_lock:
-            if product_url in self._review_cache:
-                logger.debug(f"Using cached review info for {product_url}")
-                return self._review_cache[product_url]
+        """キャッシュ機能付きレビュー情報取得（多層キャッシュ活用）"""
+        # 多層キャッシュから取得を試行
+        cache_key = f"review_{hashlib.md5(product_url.encode()).hexdigest()}"
+        cached_review = self.cache_manager.get(cache_key, "reviews")
+        
+        if cached_review is not None:
+            logger.debug(f"Using cached review data for: {product_url}")
+            return cached_review
         
         # キャッシュにない場合は取得
-        result = self.get_review_info_from_page(product_url)
+        review_info = self.get_review_info_from_page(product_url)
         
-        # キャッシュに保存
-        with self._cache_lock:
-            self._review_cache[product_url] = result
+        # 多層キャッシュに保存（6時間有効）
+        self.cache_manager.set(cache_key, review_info, "reviews", ttl_hours=6)
         
-        return result
+        return review_info
     
     def get_review_info_batch(self, product_urls: List[str]) -> Dict[str, Dict]:
         """複数商品のレビュー情報を並列取得"""
