@@ -181,6 +181,7 @@ python scripts/wordpress_auth_diagnostic.py
 - **Gemini AI記事生成**: 商品説明の自然で読みやすい日本語記事へのリライト
 - **SWELL対応**: WordPressテーマSWELLのブロック形式で記事生成
 - **重複防止**: SQLiteベースの投稿履歴管理
+- **構造化記事**: SEO最適化された一貫性のある記事構成
 
 ### ⏰ 投稿スケジューリング
 - **前倒し投稿システム**: 複数作品発見時の15分間隔前倒し投稿
@@ -216,6 +217,84 @@ python scripts/wordpress_auth_diagnostic.py
 - **Gemini AI**: 記事内容の自動生成・リライト
 - **WordPress REST API**: 記事投稿・管理
 - **環境変数**: セキュアな設定管理
+
+## 📋 自動生成記事の構成
+
+システムが生成する記事は以下の構造化された構成を持ちます：
+
+### 記事タイトル
+```
+作品タイトル【作者名またはサークル名】
+```
+
+### 記事本文構成
+
+#### 1. 導入文
+```html
+<p>エロ同人サークル「<a href="サークルタグURL">サークル名</a>」のエロマンガです。</p>
+```
+
+#### 2. パッケージ画像
+```html
+<img src="画像URL" alt="作品タイトル" class="aligncenter size-full" />
+```
+
+#### 3. 作品紹介文
+```html
+<p>Gemini AIでリライトされた自然な日本語紹介文</p>
+```
+
+#### 4. 作品情報
+```html
+<p><strong>ページ数：</strong>XX</p>
+```
+
+#### 5. ジャンル情報
+```html
+<p><strong>ジャンル：</strong><a href="ジャンルタグURL">ジャンル1</a>, <a href="ジャンルタグURL">ジャンル2</a></p>
+```
+
+#### 6. サンプル画像
+```html
+<h3>サンプル画像</h3>
+<img src="画像URL" alt="作品タイトル サンプル画像" class="aligncenter size-full" />
+<!-- DMM APIから取得した全サンプル画像を表示（上限なし） -->
+```
+
+#### 7. アフィリエイトボタン（SWELL形式）
+```html
+<div class="swell-block-button red_ is-style-btn_solid">
+  <a href="アフィリエイトURL" class="swell-block-button__link">
+    <span>続きを読むにはクリック</span>
+  </a>
+</div>
+```
+
+#### 8. レビュー情報
+```html
+<h3>レビュー</h3>
+<p><strong>評価：</strong>4.5点 (3件)</p>
+<blockquote>平均評価: 4.5点</blockquote>
+```
+
+#### 9. H2見出し（カスタムパターン）
+- `docs/patterns/`からランダム選択される装飾H2見出し
+- 作品タイトルとアフィリエイトURLが自動置換
+
+#### 10. 関連作品エリア
+```html
+<!-- 関連作品はWordPressプラグインで自動表示 -->
+```
+
+### タグ・カテゴリ設定
+- **タグ**: サークル名、作者名（重複除去）
+- **カテゴリ**: DMM APIから取得した全ジャンル
+
+### SEO最適化
+- 構造化データ対応
+- 適切なalt属性設定
+- 内部リンク最適化（タグ・カテゴリリンク）
+- SWELL WordPressテーマ完全対応
 
 ## 🔧 トラブルシューティング
 
