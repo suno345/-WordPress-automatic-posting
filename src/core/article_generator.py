@@ -10,6 +10,8 @@ from pathlib import Path
 from ..utils.constants import Constants, DefaultValues
 from ..services.exceptions import FileOperationError
 from ..utils.utils import safe_get_nested
+import base64
+import urllib.parse
 
 
 logger = logging.getLogger(__name__)
@@ -104,17 +106,20 @@ class H2PatternManager:
 class ArticleGenerator:
     """記事生成クラス（リファクタリング版）"""
     
-    def __init__(self, wordpress_api):
+    def __init__(self, wordpress_api, proxy_base_url: str = None):
         """
         記事生成クラスの初期化
         
         Args:
             wordpress_api: WordPress APIクライアント
+            proxy_base_url: 画像プロキシのベースURL
         """
         self.wp_api = wordpress_api
         self.h2_manager = H2PatternManager()
+        self.proxy_base_url = proxy_base_url or "https://mania-wiki.com/dmm-image-proxy.php"
         
         logger.info("Article generator initialized")
+        logger.info(f"Image proxy URL: {self.proxy_base_url}")
     
     def generate_article_content(self, work_data: Dict, rewritten_description: str) -> str:
         """
@@ -156,7 +161,8 @@ class ArticleGenerator:
         title = work_data.get('title', '')
         
         if package_image_url:
-            return [f'<img src="{package_image_url}" alt="{title}" class="aligncenter size-full" />']
+            proxied_url = self._get_proxied_image_url(package_image_url)
+            return [f'<img src="{proxied_url}" alt="{title}" class="aligncenter size-full" />']
         
         return []
     
@@ -204,8 +210,9 @@ class ArticleGenerator:
         
         # 最大件数まで画像を追加
         for img_url in sample_images[:Constants.MAX_SAMPLE_IMAGES]:
+            proxied_url = self._get_proxied_image_url(img_url)
             sections.append(
-                f'<img src="{img_url}" alt="{title} サンプル画像" class="aligncenter size-full" />'
+                f'<img src="{proxied_url}" alt="{title} サンプル画像" class="aligncenter size-full" />'
             )
         
         logger.info(f"Added {min(len(sample_images), Constants.MAX_SAMPLE_IMAGES)} sample images for {title}")
@@ -262,11 +269,19 @@ class ArticleGenerator:
         Returns:
             WordPress投稿用データ
         """
-        # 記事タイトル
-        title = work_data.get('title', '')
+        # 記事タイトル（作者名を含む）
+        title = self._generate_article_title(work_data)
         
         # 記事本文
         content = self.generate_article_content(work_data, rewritten_description)
+        
+        # 画像デバッグ情報をログ出力
+        logger.info(f"記事生成デバッグ - タイトル: {work_data.get('title', '')}")
+        logger.info(f"パッケージ画像URL: {work_data.get('package_image_url', 'なし')}")
+        logger.info(f"サンプル画像数: {len(work_data.get('sample_images', []))}")
+        if work_data.get('sample_images'):
+            for i, url in enumerate(work_data['sample_images'][:3]):
+                logger.info(f"サンプル画像{i+1}: {url}")
         
         # タグの準備
         tags = self._prepare_tags(work_data)
@@ -306,3 +321,71 @@ class ArticleGenerator:
         
         # 重複を除去して返す
         return list(dict.fromkeys(tags))  # 順序を保持しつつ重複除去
+    
+    def _generate_article_title(self, work_data: Dict) -> str:
+        """
+        記事タイトルを生成（作者名を含む）
+        
+        Args:
+            work_data: 作品データ
+        
+        Returns:
+            作者名を含む記事タイトル
+        """
+        work_title = work_data.get('title', '')
+        if not work_title:
+            return 'タイトル不明'
+        
+        # 作者名またはサークル名を取得
+        author_name = work_data.get('author_name')
+        circle_name = work_data.get('circle_name')
+        
+        # 作者名が有効で、サークル名と異なる場合は作者名を使用
+        if (author_name and 
+            author_name != DefaultValues.CIRCLE_NAME_UNKNOWN and 
+            author_name != circle_name):
+            creator_name = author_name
+        # そうでなければサークル名を使用
+        elif circle_name and circle_name != DefaultValues.CIRCLE_NAME_UNKNOWN:
+            creator_name = circle_name
+        else:
+            # 作者情報が不明な場合はタイトルのみ
+            return work_title
+        
+        # タイトルに作者名を含める
+        return f"{work_title}【{creator_name}】"
+    
+    def _get_proxied_image_url(self, original_url: str) -> str:
+        """
+        画像URLをプロキシ経由のURLに変換
+        
+        Args:
+            original_url: 元の画像URL
+        
+        Returns:
+            プロキシ経由の画像URL
+        """
+        # プロキシシステムを一時的に無効化（元のURLをそのまま返す）
+        return original_url
+        
+        # 以下、プロキシシステムのコードは保持（将来的に再有効化可能）
+        """
+        if not original_url:
+            return original_url
+        
+        # DMM以外のドメインはそのまま返す
+        if 'dmm.co.jp' not in original_url and 'dmm.com' not in original_url:
+            return original_url
+        
+        try:
+            # URLをBase64エンコードしてプロキシURLを生成
+            encoded_url = base64.b64encode(original_url.encode('utf-8')).decode('utf-8')
+            proxied_url = f"{self.proxy_base_url}?url={urllib.parse.quote(encoded_url)}"
+            
+            logger.debug(f"Proxied image URL: {original_url} -> {proxied_url}")
+            return proxied_url
+            
+        except Exception as e:
+            logger.error(f"Failed to create proxied URL for {original_url}: {e}")
+            return original_url
+        """
