@@ -7,15 +7,15 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
-from .config_manager import ConfigManager
-from .dmm_api_refactored import DMMAPIClient
-from .gemini_api import GeminiAPI
-from .wordpress_api_refactored import WordPressAPI
-from .article_generator_refactored import ArticleGenerator
+from ..config.config_manager import ConfigManager
+from ..api.dmm_api import DMMAPIClient
+from ..api.gemini_api import GeminiAPI
+from ..api.wordpress_api import WordPressAPI
+from .article_generator import ArticleGenerator
 from .post_manager import PostManager
-from .constants import Constants, ErrorMessages
-from .exceptions import AutoPostingError, ConfigurationError
-from .utils import setup_logging
+from ..utils.constants import Constants, ErrorMessages
+from ..services.exceptions import AutoPostingError, ConfigurationError
+from ..utils.utils import setup_logging
 
 
 logger = logging.getLogger(__name__)
@@ -24,16 +24,18 @@ logger = logging.getLogger(__name__)
 class AutoPostingSystem:
     """WordPress自動投稿システム（リファクタリング版）"""
     
-    def __init__(self, config_file: str = 'config.ini'):
+    def __init__(self, config_file: str = 'config/config.ini', verbose: bool = False):
         """
         自動投稿システムの初期化
         
         Args:
             config_file: 設定ファイルのパス
+            verbose: 詳細ログを出力するか
         
         Raises:
             ConfigurationError: 設定に問題がある場合
         """
+        self.verbose = verbose
         try:
             # 設定を読み込み
             self.config = ConfigManager(config_file)
@@ -329,3 +331,42 @@ class AutoPostingSystem:
             'connection_tests': self.test_connections(),
             'h2_patterns_count': len(self.article_gen.h2_manager._patterns)
         }
+    
+    def display_status(self) -> None:
+        """システム状態を表示"""
+        try:
+            print("=== WordPress自動投稿システム状態 ===")
+            
+            # 設定概要
+            config_summary = self.config.get_config_summary()
+            print(f"\n📊 設定情報:")
+            print(f"  WordPress URL: {config_summary['wordpress']['url']}")
+            print(f"  ユーザー名: {config_summary['wordpress']['username']}")
+            print(f"  DMM API設定: {'✅' if config_summary['dmm_api']['configured'] else '❌'}")
+            print(f"  Gemini API設定: {'✅' if config_summary['gemini']['api_key_configured'] else '❌'}")
+            print(f"  最大投稿数: {config_summary['system']['max_posts_per_run']}")
+            
+            # 投稿統計
+            posted_count = self.post_manager.get_posted_count()
+            print(f"\n📈 投稿統計:")
+            print(f"  総投稿数: {posted_count}件")
+            
+            # H2パターン
+            h2_count = len(self.article_gen.h2_manager._patterns)
+            print(f"  H2パターン数: {h2_count}件")
+            
+            # 接続テスト
+            print(f"\n🔗 接続テスト:")
+            connection_tests = self.test_connections()
+            for service, status in connection_tests.items():
+                status_icon = "✅" if status else "❌"
+                print(f"  {service}: {status_icon}")
+            
+            # 全体ステータス
+            all_connected = all(connection_tests.values())
+            overall_status = "✅ 正常" if all_connected else "⚠️  一部問題あり"
+            print(f"\n🎯 総合状態: {overall_status}")
+            
+        except Exception as e:
+            print(f"❌ 状態表示エラー: {e}")
+            self.logger.error(f"Status display error: {e}", exc_info=True)

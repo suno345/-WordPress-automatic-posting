@@ -7,10 +7,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Union
 from urllib.parse import urljoin
 
-from .constants import Constants
-from .exceptions import WordPressAPIError
-from .utils import retry_on_exception, create_tag_slug, normalize_string
-from .resource_manager import SessionMixin
+from ..utils.constants import Constants
+from ..services.exceptions import WordPressAPIError
+from ..utils.utils import retry_on_exception, create_tag_slug, normalize_string
+from ..services.resource_manager import SessionMixin
 
 
 logger = logging.getLogger(__name__)
