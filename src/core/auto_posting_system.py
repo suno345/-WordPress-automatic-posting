@@ -168,18 +168,25 @@ class AutoPostingSystem:
                 all_unposted_works.extend(unposted_works)
                 self.logger.info(f"✅ {len(unposted_works)}件の未投稿作品を追加（累計: {len(all_unposted_works)}件）")
                 
-                # バッチ処理モード：最初の検索で見つかった全ての作品を処理
-                if search_attempt == 1 and len(all_unposted_works) >= 1:
-                    self.logger.info(f"🎯 バッチ処理モード: 最初の検索で{len(all_unposted_works)}件発見、全件処理を開始")
-                    return all_unposted_works
-                
-                # 複数件モード：必要数に達した場合は必要な分のみ返す（従来ロジック）
+                # 新着優先モード：必要数（通常1件）に達したら即座に返す
                 if len(all_unposted_works) >= required_works:
                     result_works = all_unposted_works[:required_works]
-                    self.logger.info(f"🎯 目標達成: {len(result_works)}件の未投稿作品を取得")
+                    self.logger.info(f"🎯 新着優先: {len(result_works)}件取得（同じ範囲に{len(all_unposted_works)}件残存）")
+                    
+                    # 検索オフセットを進めない（同じ範囲を次回も検索）
+                    if len(all_unposted_works) > required_works:
+                        self.logger.info(f"📍 検索位置維持: {current_offset}件目から（残り{len(all_unposted_works) - required_works}件継続処理）")
+                    else:
+                        # この範囲の未投稿作品が尽きた場合のみオフセットを進める
+                        self.offset_manager.save_next_offset(current_offset, batch_size, len(all_unposted_works))
+                        self.logger.info(f"📍 検索位置更新: {current_offset + batch_size}件目へ移動")
+                    
                     return result_works
             else:
                 self.logger.info(f"⚠️ この範囲の作品はすべて投稿済み")
+                # この範囲が完全に投稿済みの場合、次の範囲に移動
+                self.offset_manager.save_next_offset(current_offset, batch_size, 0)
+                self.logger.info(f"📍 範囲完了により検索位置更新: {current_offset + batch_size}件目へ移動")
             
             # 次の検索範囲に移動
             current_offset += batch_size
@@ -220,14 +227,11 @@ class AutoPostingSystem:
         session_posted_count = 0  # このセッションでの投稿件数
         max_posts = self.config.system.max_posts_per_run
         
-        # 複数作品が見つかった場合は全件を15分刻み前倒し投稿で処理
-        if len(unposted_works) > 1:
-            self.logger.info(f"複数作品発見（{len(unposted_works)}件）- 15分刻み前倒し投稿を実行します")
-            return self._process_works_advance_schedule(unposted_works)
-        else:
-            # 単一作品の場合は従来の処理（MAX_POSTS_PER_RUN制限適用）
-            works_to_process = unposted_works[:max_posts]
-            return self._process_works_regular_schedule(works_to_process, total_posted_count)
+        # 新着優先システム：常に1件のみ処理（投稿ラグ最小化）
+        works_to_process = unposted_works[:max_posts]
+        self.logger.info(f"新着優先モード: {len(unposted_works)}件発見、{len(works_to_process)}件を処理")
+        
+        return self._process_works_regular_schedule(works_to_process, total_posted_count)
 
     def _process_works_advance_schedule(self, works: List[Dict]) -> int:
         """15分刻みスケジュール内前倒し投稿処理"""
