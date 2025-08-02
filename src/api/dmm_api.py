@@ -45,15 +45,13 @@ class DMMAPIClient(SessionMixin):
             try:
                 time.sleep(self.request_delay)
                 
-                # 基本パラメータ（コミック作品に特化）
+                # 基本パラメータ（同人作品に特化、コミック判定は後処理で実行）
                 params = {
                     'api_id': self.api_id,
                     'affiliate_id': self.affiliate_id,
                     'site': 'FANZA',
                     'service': 'doujin',         # 同人サービス
                     'floor': 'digital_doujin',   # 同人フロア
-                    'article': 'work',           # 作品形式で絞り込み
-                    'article_id': 'comic',       # コミック作品のみ
                     'hits': limit,
                     'offset': offset,
                     'sort': 'date',              # 新着順
@@ -70,8 +68,8 @@ class DMMAPIClient(SessionMixin):
                         params['article_id'] = male_genre_ids[0]  # 最初の男性向けジャンルIDを使用
                         logger.debug(f"男性向けジャンルフィルター適用: {male_genre_ids[0]}")
                     else:
-                        # ジャンルIDが取得できない場合はコミック指定を維持
-                        logger.info("男性向けジャンルIDが取得できないため、コミック指定を使用")
+                        # ジャンルIDが取得できない場合は基本パラメータのみ使用
+                        logger.info("男性向けジャンルIDが取得できないため、基本検索を使用")
                 
                 # affiliate_idが空の場合は除外
                 if not self.affiliate_id:
