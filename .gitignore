@@ -115,4 +115,4 @@ Thumbs.db
 *.temp
 
 # Documentation builds
-docs/_build/
+docs/_build/.env

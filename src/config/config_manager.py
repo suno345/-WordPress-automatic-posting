@@ -66,17 +66,39 @@ class ConfigManager:
         self.system = self._parse_system_config()
     
     def _load_config(self) -> configparser.ConfigParser:
-        """設定ファイルを読み込む"""
+        """設定ファイルを読み込む（環境変数展開対応）"""
         if not os.path.exists(self.config_file):
             raise ConfigurationError(ErrorMessages.CONFIG_NOT_FOUND.format(self.config_file))
         
         config = configparser.ConfigParser()
         try:
             config.read(self.config_file, encoding='utf-8')
+            # 環境変数展開を実行
+            self._expand_environment_variables(config)
         except Exception as e:
             raise ConfigurationError(f"設定ファイルの読み込みに失敗しました: {e}")
         
         return config
+    
+    def _expand_environment_variables(self, config: configparser.ConfigParser) -> None:
+        """設定値内の環境変数を展開"""
+        import re
+        
+        for section_name in config.sections():
+            for key, value in config[section_name].items():
+                # ${VAR} 形式の環境変数プレースホルダーを検索
+                env_vars = re.findall(r'\$\{([^}]+)\}', value)
+                
+                for env_var in env_vars:
+                    env_value = os.getenv(env_var)
+                    if env_value is None:
+                        raise ConfigurationError(f"必須環境変数が設定されていません: {env_var}")
+                    
+                    # プレースホルダーを実際の環境変数値で置換
+                    value = value.replace(f"${{{env_var}}}", env_value)
+                
+                # 展開された値を設定に反映
+                config[section_name][key] = value
     
     def _validate_config(self) -> None:
         """設定ファイルの必須項目をバリデーション"""
