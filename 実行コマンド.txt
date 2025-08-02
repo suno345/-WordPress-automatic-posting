@@ -55,7 +55,7 @@ try:
                     # 予約投稿設定
                     schedule_manager = PostScheduleManager(config)
                     target_time = datetime.now() + timedelta(minutes=2)
-                    schedule_id = schedule_manager.schedule_post(
+                    schedule_id = schedule_manager.add_to_schedule(
                         work_data=work_data, 
                         article_content=article, 
                         scheduled_time=target_time
