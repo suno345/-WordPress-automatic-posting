@@ -1,0 +1,85 @@
+# VPS 本番記事生成・投稿テストコマンド（PostScheduleManager修正版）
+
+# 方法0: VPS更新（必要に応じて実行）
+./scripts/vps_update.sh
+
+# 方法1: 環境変数設定
+echo "🔧 必要な環境変数を手動設定..."
+export WORDPRESS_PASSWORD='zhC2 MaOT aDBC G2lz oWyT aEuU'
+export DMM_API_ID='gD92abXPQ9hZn9nzDR0v'
+export DMM_AFFILIATE_ID='fanz0077-990'
+
+# .envファイルからGEMINI_API_KEYを取得
+echo "📥 GEMINI_API_KEY を .env から取得..."
+GEMINI_KEY=$(grep GEMINI_API_KEY .env | cut -d'=' -f2)
+export GEMINI_API_KEY="$GEMINI_KEY"
+
+echo "設定完了後の環境変数確認:"
+echo "WORDPRESS_PASSWORD: $(if [ -n "$WORDPRESS_PASSWORD" ]; then echo "設定済み"; else echo "未設定"; fi)"
+echo "GEMINI_API_KEY: $(if [ -n "$GEMINI_API_KEY" ]; then echo "設定済み"; else echo "未設定"; fi)"
+echo "DMM_API_ID: $(if [ -n "$DMM_API_ID" ]; then echo "設定済み"; else echo "未設定"; fi)"
+echo "DMM_AFFILIATE_ID: $(if [ -n "$DMM_AFFILIATE_ID" ]; then echo "設定済み"; else echo "未設定"; fi)"
+echo ""
+
+# 方法2: 実際の作品データで記事生成テスト（PostScheduleManager修正版）
+cat > real_post_test.py << 'EOF'
+import os
+from src.api.dmm_api import DMMAPIClient
+from src.api.gemini_api import GeminiAPI
+from src.core.post_schedule_manager import PostScheduleManager
+from src.config.secure_config_manager import SecureConfigManager
+from datetime import datetime, timedelta
+
+print("🎯 本番記事生成テスト開始...")
+
+try:
+    config = SecureConfigManager()
+    dmm_client = DMMAPIClient("gD92abXPQ9hZn9nzDR0v", "fanz0077-990")
+    
+    # GeminiAPIキーを直接環境変数から取得
+    gemini_api_key = os.getenv('GEMINI_API_KEY')
+    gemini_api = GeminiAPI(api_key=gemini_api_key)
+
+    # ジャンルフィルター有効で作品取得
+    items = dmm_client.get_items(limit=5, offset=1, use_genre_filter=True)
+    print("取得アイテム数:", len(items))
+
+    if items:
+        for item in items:
+            work_data = dmm_client.convert_to_work_data(item, skip_review_check=True)
+            if work_data:
+                title = work_data["title"]
+                print(f"✅ 作品変換成功: {title}")
+                article = gemini_api.rewrite_description(title=work_data["title"], original_description=work_data["description"])
+                if article:
+                    schedule_manager = PostScheduleManager(config)
+                    target_time = datetime.now() + timedelta(minutes=2)
+                    schedule_id = schedule_manager.schedule_post(work_data=work_data, article_content=article, scheduled_time=target_time)
+                    time_str = target_time.strftime("%H:%M:%S")
+                    print(f"🎉 予約投稿設定完了: {schedule_id}")
+                    print(f"📅 投稿予定: {time_str}")
+                    print(f"📝 作品: {title}")
+                    break
+                else:
+                    print("❌ 記事生成失敗")
+    else:
+        print("❌ 作品取得失敗")
+
+except Exception as e:
+    print(f"❌ エラー発生: {e}")
+    import traceback
+    traceback.print_exc()
+EOF
+
+python real_post_test.py
+rm real_post_test.py
+
+# 方法3: 予約投稿実行（2分後）
+echo "⏰ 2分後に以下コマンドで投稿実行："
+echo "python execute_scheduled_posts.py --vps-mode --multiple 1"
+
+# 方法4: 現在の予約状況確認
+python execute_scheduled_posts.py --vps-mode --status
+
+# 方法5: ログ確認
+tail -10 logs/auto_post_$(date +%Y%m%d).log
