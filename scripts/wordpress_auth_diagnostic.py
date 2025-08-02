@@ -6,6 +6,10 @@ import sys
 import os
 import requests
 from datetime import datetime
+from dotenv import load_dotenv
+
+# .envファイルから環境変数を読み込み
+load_dotenv()
 
 # プロジェクトルートを追加
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

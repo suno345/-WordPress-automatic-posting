@@ -5,6 +5,10 @@ WordPress自動投稿システム メインスクリプト
 import sys
 import argparse
 from pathlib import Path
+from dotenv import load_dotenv
+
+# .envファイルから環境変数を読み込み
+load_dotenv()
 
 # プロジェクトルートをPythonパスに追加
 project_root = Path(__file__).parent
