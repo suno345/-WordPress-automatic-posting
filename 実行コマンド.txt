@@ -1,12 +1,80 @@
-# VPS cronパス問題緊急修正（v2.4.1 修正版）
+# VPS用実行コマンド集（v3.0.0 前倒し投稿システム対応版）
 
-# 方法1: 現在の予約状況詳細確認
-echo "📋 現在の予約状況詳細確認..."
-python execute_scheduled_posts.py --vps-mode --status
+## 1. システムアップデート手順
+echo "🔄 VPSシステムアップデート開始..."
 
-# 方法2: 予約投稿ファイルの直接確認
+# 最新コードを取得
+git pull origin main
+
+# Pythonバージョン確認
+python --version
+
+# 仮想環境確認
+which python
+echo "仮想環境: $(which python)"
+
+## 2. 環境設定確認
 echo ""
-echo "📁 予約投稿ファイル確認..."
+echo "⚙️ 環境設定確認..."
+
+# 重要な設定値を確認
+cat .env | grep -E "MAX_POSTS_PER_RUN|POST_INTERVAL|SEARCH_LIMIT"
+
+# ディレクトリ構造確認
+ls -la data/
+ls -la logs/
+
+## 3. 前倒し投稿システム動作テスト
+echo ""
+echo "🚀 前倒し投稿システムテスト..."
+
+# 通常の動作テスト（1件）
+echo "1件テスト実行:"
+timeout 300 python main.py --skip-review
+
+echo ""
+echo "複数件テスト実行（要注意：時間とメモリを大量消費）:"
+echo "※ 必要に応じてCtrl+Cで中断してください"
+# 複数件テスト（要注意）
+# timeout 1800 python main.py --skip-review
+
+## 4. システム状態確認
+echo ""
+echo "📊 システム状態確認..."
+
+# 投稿履歴確認
+python -c "
+from src.core.post_manager import PostManager
+pm = PostManager()
+count = pm.get_posted_count()
+print(f'総投稿数: {count}件')
+"
+
+# WordPress API接続テスト
+python -c "
+from src.config.simple_config_manager import SimpleConfigManager
+from src.api.wordpress_api import WordPressAPI
+
+config = SimpleConfigManager()
+wp_api = WordPressAPI(
+    url=config.wordpress.url,
+    username=config.wordpress.username, 
+    password=config.wordpress.password
+)
+
+try:
+    with wp_api:
+        result = wp_api.test_connection()
+        print(f'WordPress接続: {\"✅ OK\" if result else \"❌ NG\"}')
+except Exception as e:
+    print(f'WordPress接続エラー: {e}')
+"
+
+## 5. 予約投稿状況確認
+echo ""
+echo "📅 予約投稿状況確認..."
+
+# 予約投稿ファイル確認
 python -c "
 import json
 from pathlib import Path
@@ -19,73 +87,88 @@ if schedule_file.exists():
         schedule_data = json.load(f)
     
     print('📅 予約投稿データ:')
+    total_posts = 0
     for date, posts in schedule_data.items():
-        print(f'  日付: {date}')
-        for post_id, post_data in posts.items():
+        post_count = len(posts)
+        total_posts += post_count
+        print(f'  {date}: {post_count}件')
+        
+        # 最初の3件のタイトルを表示
+        for i, (post_id, post_data) in enumerate(posts.items()):
+            if i >= 3:
+                break
             title = post_data.get('work_data', {}).get('title', '不明')
             scheduled_time = post_data.get('scheduled_time', '不明')
             status = post_data.get('status', '不明')
-            print(f'    - {post_id}: {title}')
-            print(f'      予定時刻: {scheduled_time}')
-            print(f'      ステータス: {status}')
+            print(f'    - {title[:30]}... ({scheduled_time}, {status})')
+        
+        if len(posts) > 3:
+            print(f'    ... 他{len(posts) - 3}件')
+    
+    print(f'📊 総予約投稿数: {total_posts}件')
 else:
     print('❌ 予約投稿ファイルが見つかりません')
-
-# 完了投稿ファイルも確認
-completed_file = Path('data/schedule/completed_posts.json')
-if completed_file.exists():
-    with open(completed_file, 'r', encoding='utf-8') as f:
-        completed_data = json.load(f)
-    
-    print('')
-    print('✅ 完了投稿データ:')
-    for post_id, post_data in completed_data.items():
-        title = post_data.get('work_data', {}).get('title', '不明')
-        completed_time = post_data.get('completed_at', '不明')
-        print(f'    - {post_id}: {title} (完了: {completed_time})')
-else:
-    print('📝 完了投稿ファイルなし')
 "
 
-# 方法3: cronログ確認
+## 6. ログ確認
 echo ""
-echo "📄 cronログ確認（最新20行）..."
-tail -20 logs/cron.log 2>/dev/null || echo "cronログファイルが見つかりません"
+echo "📄 最新ログ確認..."
 
-# 方法4: 今日の自動投稿ログ確認
-echo ""
-echo "📄 今日の自動投稿ログ確認..."
-tail -30 logs/auto_post_$(date +%Y%m%d).log 2>/dev/null || echo "今日の自動投稿ログファイルが見つかりません"
+# 最新の自動投稿ログ
+ls -la logs/ | grep auto_posting | tail -3
+echo "最新ログの最後10行:"
+ls logs/auto_posting_*.log | tail -1 | xargs tail -10 2>/dev/null || echo "ログファイルなし"
 
-# 方法5: cronジョブ設定確認
+## 7. cronジョブ管理
 echo ""
-echo "⏰ cronジョブ設定確認..."
+echo "⏰ cronジョブ管理..."
+
+# 現在のcronジョブ確認
+echo "現在のcronジョブ:"
 crontab -l | grep wordpress-auto-posting || echo "cronジョブが設定されていません"
 
-# 方法6: 手動で予約投稿実行テスト
-echo ""
-echo "🔧 手動予約投稿実行テスト..."
-python execute_scheduled_posts.py --vps-mode --multiple 1
+# cronサービス状態確認
+echo "cronサービス状態:"
+sudo systemctl status cron | head -5
 
-# 方法7: 予約投稿実行後の状況再確認
+## 8. メモリ・パフォーマンス確認
 echo ""
-echo "📋 実行後の予約状況確認..."
-python execute_scheduled_posts.py --vps-mode --status
+echo "💾 システムリソース確認..."
 
-# 方法8: システム状況サマリー
+# メモリ使用量
+free -h
+
+# ディスク使用量
+df -h | grep -E "(Filesystem|/dev/)"
+
+## 9. 緊急時のコマンド
 echo ""
-echo "💻 調査結果サマリー:"
-echo "バージョン: v2.4.0（調査版）"
-echo "目的: VPS予約投稿失敗の原因特定"
+echo "🚨 緊急時コマンド:"
 echo ""
-echo "📋 調査項目:"
-echo "1. 予約投稿データの存在確認"
-echo "2. cronジョブの設定と実行状況"
-echo "3. ログファイルのエラー確認"
-echo "4. 手動実行での動作テスト"
+echo "# プロセス強制終了"
+echo "pkill -f 'python main.py'"
 echo ""
-echo "🔍 予想される原因:"
-echo "- cronジョブが動作していない"
-echo "- 予約投稿データの形式問題"
-echo "- 時刻判定のロジック問題"
-echo "- 権限やパスの問題"
+echo "# 予約投稿を全て削除"
+echo "rm -f data/schedule/post_schedule.json"
+echo ""
+echo "# ログを全て削除"
+echo "rm -f logs/*"
+echo ""
+echo "# cronジョブ停止"
+echo "crontab -r"
+
+## 10. 実行結果サマリー
+echo ""
+echo "📋 VPSシステム情報サマリー:"
+echo "バージョン: v3.0.0（前倒し投稿システム対応版）"
+echo "主要機能:"
+echo "- MAX_POSTS_PER_RUN=100対応"
+echo "- 15分刻み前倒し投稿"
+echo "- ArticleGeneratorメソッド名修正済み"
+echo "- 継続検索ロジック（1-100, 101-200, ...）"
+echo ""
+echo "⚠️ 注意事項:"
+echo "- 100件処理は大量のメモリと時間を消費"
+echo "- 本番実行前に必ず1件テストを実行"
+echo "- 長時間処理中はtimeoutコマンドで制限推奨"
+echo ""
