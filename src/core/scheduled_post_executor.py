@@ -3,7 +3,7 @@
 """
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 import time
 
 from .post_schedule_manager import PostScheduleManager

@@ -51,7 +51,7 @@ class BatchArticleGenerator:
         logger.info("バッチ記事生成システム初期化完了")
     
     def generate_daily_batch(self, target_date: Optional[datetime] = None) -> Dict:
-        \"\"\"
+        """
         1日分の記事を一括生成し、15分間隔で予約設定
         
         Args:
@@ -59,7 +59,7 @@ class BatchArticleGenerator:
             
         Returns:
             生成結果の詳細
-        \"\"\"
+        """
         if target_date is None:
             target_date = datetime.now() + timedelta(days=1)
         
@@ -126,7 +126,7 @@ class BatchArticleGenerator:
         return result
     
     def _fetch_bulk_works(self, target_count: int) -> List[Dict]:
-        \"\"\"
+        """
         大量の作品データを効率的に取得
         
         Args:
@@ -134,7 +134,7 @@ class BatchArticleGenerator:
             
         Returns:
             作品データのリスト
-        \"\"\"
+        """
         logger.info(f"大量作品取得開始 - 目標: {target_count}件")
         
         # 戦略的検索パターン（時間帯別に最適化）
@@ -200,7 +200,7 @@ class BatchArticleGenerator:
         return unique_works
     
     def _filter_unposted_works(self, works: List[Dict]) -> List[Dict]:
-        \"\"\"投稿済み作品を除外\"\"\"
+        """投稿済み作品を除外"""
         if not self.post_manager:
             return works
         
@@ -213,7 +213,7 @@ class BatchArticleGenerator:
         return unposted_works
     
     def _generate_articles_parallel(self, works: List[Dict]) -> List[Dict]:
-        \"\"\"
+        """
         並列処理で記事を生成
         
         Args:
@@ -221,7 +221,7 @@ class BatchArticleGenerator:
             
         Returns:
             生成された記事データリスト
-        \"\"\"
+        """
         logger.info(f"並列記事生成開始: {len(works)}件 (ワーカー: {self.parallel_workers})")
         
         generated_articles = []
@@ -257,7 +257,7 @@ class BatchArticleGenerator:
         return generated_articles
     
     def _generate_single_article(self, work_data: Dict) -> Optional[Dict]:
-        \"\"\"
+        """
         単一記事の生成
         
         Args:
@@ -265,7 +265,7 @@ class BatchArticleGenerator:
             
         Returns:
             生成された記事データまたはNone
-        \"\"\"
+        """
         try:
             article_content = self.article_generator.generate_article(work_data)
             
@@ -283,7 +283,7 @@ class BatchArticleGenerator:
         return None
     
     def _create_posting_schedule(self, articles: List[Dict], target_date: datetime) -> Dict:
-        \"\"\"
+        """
         記事の投稿スケジュールを作成
         
         Args:
@@ -292,7 +292,7 @@ class BatchArticleGenerator:
             
         Returns:
             スケジュール情報
-        \"\"\"
+        """
         logger.info(f"投稿スケジュール作成開始: {len(articles)}件")
         
         # 投稿開始時刻を設定（対象日の00:00）
@@ -309,7 +309,7 @@ class BatchArticleGenerator:
         return schedule_info
     
     def get_generation_statistics(self, days: int = 7) -> Dict:
-        \"\"\"
+        """
         バッチ生成の統計情報を取得
         
         Args:
@@ -317,7 +317,7 @@ class BatchArticleGenerator:
             
         Returns:
             統計情報
-        \"\"\"
+        """
         # スケジュール管理システムから統計を取得
         schedule_status = self.schedule_manager.get_schedule_status()
         
@@ -329,7 +329,7 @@ class BatchArticleGenerator:
         }
     
     def _get_last_batch_info(self) -> Dict:
-        \"\"\"最後のバッチ生成情報を取得\"\"\"
+        """最後のバッチ生成情報を取得"""
         # 実装は実際のログファイルまたはメタデータから取得
         return {
             "date": datetime.now().strftime("%Y-%m-%d"),
@@ -339,7 +339,7 @@ class BatchArticleGenerator:
         }
     
     def _get_optimization_recommendations(self) -> List[str]:
-        \"\"\"最適化の推奨事項を取得\"\"\"
+        """最適化の推奨事項を取得"""
         recommendations = []
         
         # スケジュール状況に基づく推奨事項
@@ -357,7 +357,7 @@ class BatchArticleGenerator:
         return recommendations
     
     def emergency_generation(self, count: int = 24) -> Dict:
-        \"\"\"
+        """
         緊急時の記事生成（少数を迅速に生成）
         
         Args:
@@ -365,7 +365,7 @@ class BatchArticleGenerator:
             
         Returns:
             生成結果
-        \"\"\"
+        """
         logger.warning(f"緊急記事生成開始: {count}件")
         
         try:
