@@ -1,10 +1,44 @@
-# VPS用実行コマンド集（v3.0.0 前倒し投稿システム対応版）
+# VPS用実行コマンド集（v4.1.0 アイキャッチ画像対応版）
 
-## 1. システムアップデート手順
-echo "🔄 VPSシステムアップデート開始..."
+## 【重要】最新版アップデート手順
+echo "🚀 アイキャッチ画像対応版アップデート開始..."
 
 # 最新コードを取得
 git pull origin main
+
+## 【新機能】投稿カウンターリセット
+echo "投稿日時をリセットして翌日0:00から開始..."
+cd /home/member1/wordpress-auto-posting
+export PYTHONPATH=/home/member1/wordpress-auto-posting
+python3 -m src.main --reset-posted-count
+
+# 古いcron設定を完全削除
+echo "古いcron設定削除中..."
+crontab -r
+
+# 新しいcron設定を作成
+echo "新しいcron設定作成中..."
+cat > /tmp/new_cron << 'EOF'
+# WordPress自動投稿システム（新着優先版） - 15分間隔実行
+*/15 * * * * cd /home/member1/wordpress-auto-posting && /home/member1/wordpress-auto-posting/venv/bin/python -m src.main --auto --vps-mode >> /home/member1/wordpress-auto-posting/logs/auto_posting.log 2>&1
+
+# 日次システム状態チェック - 毎日午前1時
+0 1 * * * cd /home/member1/wordpress-auto-posting && /home/member1/wordpress-auto-posting/venv/bin/python -m src.main --status >> /home/member1/wordpress-auto-posting/logs/daily_status.log 2>&1
+
+# 週次Git更新 - 毎週日曜日午前3時
+0 3 * * 0 cd /home/member1/wordpress-auto-posting && git pull origin main >> /home/member1/wordpress-auto-posting/logs/git_update.log 2>&1
+EOF
+
+# 新しいcron設定を適用
+crontab /tmp/new_cron
+
+# 設定確認
+echo "✅ 新しいcron設定完了:"
+crontab -l
+
+# ログディレクトリ準備
+mkdir -p /home/member1/wordpress-auto-posting/logs
+chmod 755 /home/member1/wordpress-auto-posting/logs
 
 # Pythonバージョン確認
 python --version
@@ -13,39 +47,45 @@ python --version
 which python
 echo "仮想環境: $(which python)"
 
-## 2. 環境設定確認
+## 2. 新着優先システム設定確認
 echo ""
-echo "⚙️ 環境設定確認..."
+echo "⚙️ 新着優先システム設定確認..."
 
 # 重要な設定値を確認
 cat .env | grep -E "MAX_POSTS_PER_RUN|POST_INTERVAL|SEARCH_LIMIT"
 
-# VPS用に1件モード設定（最初の検索で見つかったら追加検索せずに1件だけ処理）
-echo "1件モード設定:"
+# 新着優先システム用に1件モード設定
+echo "新着優先モード設定（1件/15分）:"
 echo "MAX_POSTS_PER_RUN=1" >> .env || echo "MAX_POSTS_PER_RUN=1" | tee -a .env
 cat .env | grep MAX_POSTS_PER_RUN
 
-# ディレクトリ構造確認
+# 検索オフセット管理ディレクトリ確認
+mkdir -p data/
 ls -la data/
-ls -la logs/
 
-## 3. 前倒し投稿システム動作テスト
+## 3. 新着優先システム動作テスト
 echo ""
-echo "🚀 前倒し投稿システムテスト..."
+echo "🚀 新着優先システムテスト..."
 
-# 通常の動作テスト（1件）
-echo "1件テスト実行:"
-timeout 300 python main.py --skip-review
+# 動作テスト（1件処理）
+echo "新着優先テスト実行:"
+timeout 300 python -m src.main --auto --vps-mode
 
+# システム状態確認
+echo "システム状態確認:"
+python -m src.main --status
+
+## 4. 検索オフセット管理確認
 echo ""
-echo "複数件テスト実行（要注意：時間とメモリを大量消費）:"
-echo "※ 必要に応じてCtrl+Cで中断してください"
-# 複数件テスト（要注意）
-# timeout 1800 python main.py --skip-review
+echo "📍 検索オフセット管理確認..."
 
-## 4. システム状態確認
-echo ""
-echo "📊 システム状態確認..."
+# 検索オフセット状況を確認
+python -c "
+from src.core.search_offset_manager import SearchOffsetManager
+offset_manager = SearchOffsetManager()
+status = offset_manager.get_status()
+print(f'検索オフセット状況: {status}')
+"
 
 # 投稿履歴確認
 python -c "
@@ -55,7 +95,62 @@ count = pm.get_posted_count()
 print(f'総投稿数: {count}件')
 "
 
-# WordPress API接続テスト
+## 5. 新着優先システム動作確認テスト
+echo ""
+echo "🧪 新着優先システム動作確認テスト..."
+
+# 手動で1回テスト実行
+echo "新着優先システムテスト実行中..."
+cd /home/member1/wordpress-auto-posting
+timeout 300 python -m src.main --auto --vps-mode
+
+# テスト結果確認
+echo "テスト実行結果:"
+tail -20 /home/member1/wordpress-auto-posting/logs/auto_posting.log
+
+# cron設定確認
+echo ""
+echo "⏰ cron設定確認:"
+crontab -l
+
+## 6. 即座に動作確認（次の15分刻み時刻まで待機）
+echo ""
+echo "⏰ 次回cron実行時刻計算..."
+
+# 現在時刻確認
+current_time=$(date '+%Y-%m-%d %H:%M')
+echo "現在時刻: $current_time"
+
+# 次の15分刻み時刻を計算
+current_minute=$(date '+%M')
+next_quarter=$((((current_minute / 15) + 1) * 15))
+
+if [ $next_quarter -ge 60 ]; then
+    next_hour=$(($(date '+%H') + 1))
+    next_minute=0
+    if [ $next_hour -ge 24 ]; then
+        next_hour=0
+        next_date=$(date -d 'tomorrow' '+%Y-%m-%d')
+    else
+        next_date=$(date '+%Y-%m-%d')
+    fi
+else
+    next_hour=$(date '+%H')
+    next_minute=$next_quarter
+    next_date=$(date '+%Y-%m-%d')
+fi
+
+printf "⏰ 次回自動実行時刻: %s %02d:%02d\n" "$next_date" "$next_hour" "$next_minute"
+
+# 既存ログの確認
+echo ""
+echo "📁 ログディレクトリ確認..."
+ls -la logs/ | head -10
+
+## 7. WordPress API接続テスト
+echo ""
+echo "🔗 WordPress API接続テスト..."
+
 python -c "
 from src.config.simple_config_manager import SimpleConfigManager
 from src.api.wordpress_api import WordPressAPI
@@ -75,68 +170,31 @@ except Exception as e:
     print(f'WordPress接続エラー: {e}')
 "
 
-## 5. 予約投稿状況確認
+## 8. DMM API接続テスト
 echo ""
-echo "📅 予約投稿状況確認..."
+echo "🔗 DMM API接続テスト..."
 
-# 予約投稿ファイル確認
 python -c "
-import json
-from pathlib import Path
-from datetime import datetime
+from src.config.simple_config_manager import SimpleConfigManager
+from src.api.dmm_api import DMMAPIClient
 
-# 予約投稿ファイルのパスを確認
-schedule_file = Path('data/schedule/post_schedule.json')
-if schedule_file.exists():
-    with open(schedule_file, 'r', encoding='utf-8') as f:
-        schedule_data = json.load(f)
-    
-    print('📅 予約投稿データ:')
-    total_posts = 0
-    for date, posts in schedule_data.items():
-        post_count = len(posts)
-        total_posts += post_count
-        print(f'  {date}: {post_count}件')
-        
-        # 最初の3件のタイトルを表示
-        for i, (post_id, post_data) in enumerate(posts.items()):
-            if i >= 3:
-                break
-            title = post_data.get('work_data', {}).get('title', '不明')
-            scheduled_time = post_data.get('scheduled_time', '不明')
-            status = post_data.get('status', '不明')
-            print(f'    - {title[:30]}... ({scheduled_time}, {status})')
-        
-        if len(posts) > 3:
-            print(f'    ... 他{len(posts) - 3}件')
-    
-    print(f'📊 総予約投稿数: {total_posts}件')
-else:
-    print('❌ 予約投稿ファイルが見つかりません')
+config = SimpleConfigManager()
+dmm_client = DMMAPIClient(
+    api_id=config.dmm_api.api_id,
+    affiliate_id=config.dmm_api.affiliate_id,
+    request_delay=config.system.request_delay
+)
+
+try:
+    with dmm_client:
+        test_items = dmm_client.get_items(limit=1)
+        print(f'DMM API接続: {\"✅ OK\" if len(test_items) > 0 else \"❌ NG\"}')
+        print(f'テスト取得件数: {len(test_items)}件')
+except Exception as e:
+    print(f'DMM API接続エラー: {e}')
 "
 
-## 6. ログ確認
-echo ""
-echo "📄 最新ログ確認..."
-
-# 最新の自動投稿ログ
-ls -la logs/ | grep auto_posting | tail -3
-echo "最新ログの最後10行:"
-ls logs/auto_posting_*.log | tail -1 | xargs tail -10 2>/dev/null || echo "ログファイルなし"
-
-## 7. cronジョブ管理
-echo ""
-echo "⏰ cronジョブ管理..."
-
-# 現在のcronジョブ確認
-echo "現在のcronジョブ:"
-crontab -l | grep wordpress-auto-posting || echo "cronジョブが設定されていません"
-
-# cronサービス状態確認
-echo "cronサービス状態:"
-sudo systemctl status cron | head -5
-
-## 8. メモリ・パフォーマンス確認
+## 9. システムリソース確認
 echo ""
 echo "💾 システムリソース確認..."
 
@@ -146,15 +204,67 @@ free -h
 # ディスク使用量
 df -h | grep -E "(Filesystem|/dev/)"
 
-## 9. 緊急時のコマンド
+# cronサービス状態確認
+echo "cronサービス状態:"
+sudo systemctl status cron | head -5
+
+## 10. リアルタイム監視コマンド
+echo ""
+echo "👀 リアルタイム監視コマンド:"
+echo ""
+echo "# 自動投稿ログをリアルタイム監視"
+echo "tail -f /home/member1/wordpress-auto-posting/logs/auto_posting.log"
+echo ""
+echo "# 今日の投稿状況確認"
+echo "grep '投稿完了' /home/member1/wordpress-auto-posting/logs/auto_posting.log | tail -10"
+echo ""
+echo "# 検索オフセット履歴確認"
+echo "grep '検索位置' /home/member1/wordpress-auto-posting/logs/auto_posting.log | tail -5"
+echo ""
+echo "# エラーログ確認"
+echo "grep 'ERROR' /home/member1/wordpress-auto-posting/logs/auto_posting.log | tail -5"
+
+## 11. 新着優先システムの特徴確認
+echo ""
+echo "🎯 新着優先システム動作確認..."
+
+python -c "
+from pathlib import Path
+import json
+
+# 検索オフセットファイル確認
+offset_file = Path('data/search_offset.json')
+if offset_file.exists():
+    with open(offset_file, 'r', encoding='utf-8') as f:
+        offset_data = json.load(f)
+    print(f'🔍 現在の検索位置: {offset_data.get(\"next_offset\", \"不明\")}件目から')
+    print(f'📅 最終更新: {offset_data.get(\"last_updated\", \"不明\")}')
+else:
+    print('🔍 検索オフセットファイル未作成（初回実行時に作成されます）')
+
+# 投稿履歴ファイル確認
+posted_file = Path('data/posted_works.json')
+if posted_file.exists():
+    with open(posted_file, 'r', encoding='utf-8') as f:
+        posted_data = json.load(f)
+    posted_count = len(posted_data.get('posted_work_ids', []))
+    print(f'📝 投稿済み作品数: {posted_count}件')
+else:
+    print('📝 投稿履歴ファイル未作成（初回投稿時に作成されます）')
+"
+
+## 12. 緊急時のコマンド
 echo ""
 echo "🚨 緊急時コマンド:"
 echo ""
 echo "# プロセス強制終了"
-echo "pkill -f 'python main.py'"
+echo "pkill -f 'python -m src.main'"
 echo ""
-echo "# 予約投稿を全て削除"
-echo "rm -f data/schedule/post_schedule.json"
+echo "# 検索オフセットリセット（1件目から再開）"
+echo "rm -f data/search_offset.json"
+echo ""
+echo "# 投稿履歴リセット（全作品を未投稿状態に）"
+echo "rm -f data/posted_works.json"
 echo ""
 echo "# ログを全て削除"
 echo "rm -f logs/*"
@@ -162,18 +272,36 @@ echo ""
 echo "# cronジョブ停止"
 echo "crontab -r"
 
-## 10. 実行結果サマリー
+## 13. 手動実行コマンド
 echo ""
-echo "📋 VPSシステム情報サマリー:"
-echo "バージョン: v3.1.0（1件モード・アイキャッチ対応版）"
-echo "主要機能:"
-echo "- 1件モード: MAX_POSTS_PER_RUN=1で最初の検索で見つかったら即座に1件処理"
-echo "- 100件モード: MAX_POSTS_PER_RUN=100で15分刻み前倒し投稿"
+echo "🔧 手動実行コマンド:"
+echo ""
+echo "# 1回分の自動投稿実行"
+echo "cd /home/member1/wordpress-auto-posting && python -m src.main --auto --vps-mode"
+echo ""
+echo "# システム状態確認"
+echo "cd /home/member1/wordpress-auto-posting && python -m src.main --status"
+echo ""
+echo "# 接続テスト"
+echo "cd /home/member1/wordpress-auto-posting && python -m src.main --test"
+
+## 14. 実行結果サマリー
+echo ""
+echo "📋 新着優先投稿システム情報サマリー:"
+echo "バージョン: v4.0.0（新着優先・投稿ラグ最小化版）"
+echo ""
+echo "🎯 主要機能:"
+echo "- 新着優先処理: 96件発見時も1件ずつ15分間隔で投稿"
+echo "- 投稿ラグ最小化: 新着作品の最大投稿ラグ15分"
+echo "- 検索オフセット管理: 同じ範囲を継続検索"
+echo "- 投稿履歴管理: 既投稿作品の自動除外"
 echo "- WordPressアイキャッチ画像自動設定"
-echo "- 継続検索ロジック（1-100, 101-200, ...）"
 echo ""
-echo "⚠️ 運用推奨設定:"
-echo "- VPS通常運用: MAX_POSTS_PER_RUN=1（1件ずつ確実に処理）"
-echo "- 大量投稿時: MAX_POSTS_PER_RUN=100（大量のメモリと時間を消費）"
-echo "- アイキャッチ画像が自動的にWordPressに設定される"
+echo "🔄 動作フロー例:"
+echo "00:00 → 1-100件検索 → 96件発見 → 1件投稿 → 検索位置維持"
+echo "00:15 → 1-100件検索 → 95件発見 → 1件投稿 → 検索位置維持"
+echo "00:30 → 1-100件検索 → 94件発見 → 1件投稿 → 検索位置維持"
+echo "... (96回実行で全件処理完了)"
+echo "24:00 → 1-100件検索 → 0件発見 → 101-200件検索に移行"
 echo ""
+echo "✅ 設定完了！新着優先投稿システムが15分間隔で動作します。"

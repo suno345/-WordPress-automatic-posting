@@ -62,6 +62,18 @@ class PostManager:
         """投稿済み作品数を取得"""
         return len(self.posted_works)
     
+    def reset_posted_count(self) -> bool:
+        """投稿カウンターをリセット（投稿済みデータをクリア）"""
+        try:
+            old_count = len(self.posted_works)
+            self.posted_works.clear()
+            self._save_posted_works()
+            logger.info(f"投稿カウンターをリセット: {old_count}件 → 0件")
+            return True
+        except Exception as e:
+            logger.error(f"投稿カウンターのリセットに失敗: {e}")
+            return False
+    
     def filter_unposted_works(self, work_ids: List[str]) -> List[str]:
         """未投稿の作品IDのみをフィルタリング"""
         unposted = [work_id for work_id in work_ids if not self.is_posted(work_id)]

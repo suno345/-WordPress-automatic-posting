@@ -69,6 +69,12 @@ def parse_arguments():
         help='レビューチェックをスキップ（テスト用）'
     )
     
+    parser.add_argument(
+        '--reset-posted-count',
+        action='store_true',
+        help='投稿カウンターをリセット（次回投稿日時を今日に戻す）'
+    )
+    
     return parser.parse_args()
 
 
@@ -98,6 +104,17 @@ def main():
         elif args.status:
             system.display_status()
             sys.exit(0)
+        elif args.reset_posted_count:
+            # 投稿カウンターリセット
+            print("🔄 投稿カウンターをリセットしています...")
+            old_count = system.post_manager.get_posted_count()
+            success = system.post_manager.reset_posted_count()
+            if success:
+                print(f"✅ 投稿カウンターをリセットしました: {old_count}件 → 0件")
+                print("📅 次回投稿は翌日0:00から開始されます")
+            else:
+                print("❌ 投稿カウンターのリセットに失敗しました")
+            sys.exit(0 if success else 1)
         else:
             # 通常の投稿処理
             success = system.run()
