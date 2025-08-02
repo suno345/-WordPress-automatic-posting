@@ -105,6 +105,9 @@ def main():
         config_file = args.config
         if args.vps_mode:
             config_file = 'config/config.vps.ini'
+            # VPSモードを環境変数に設定
+            import os
+            os.environ['VPS_MODE'] = 'true'
             logger.info(f"VPSモード: {config_file} を使用")
         
         # 詳細ログ設定
@@ -269,14 +272,23 @@ def test_wordpress_connection(wp_api):
     
     try:
         # WordPress API接続テスト
-        result = wp_api.test_connection()
-        if result.get('success'):
+        connection_success = wp_api.test_connection()
+        if connection_success:
             print("✅ WordPress API接続成功")
-            print(f"   サイトURL: {result.get('site_url', 'N/A')}")
-            print(f"   サイト名: {result.get('site_name', 'N/A')}")
+            
+            # サイト情報も取得してみる
+            try:
+                site_info = wp_api.get_site_info()
+                if site_info:
+                    print(f"   サイト名: {site_info.get('name', 'N/A')}")
+                    print(f"   サイトURL: {site_info.get('url', 'N/A')}")
+                    print(f"   説明: {site_info.get('description', 'N/A')}")
+                else:
+                    print("   サイト情報: 取得できませんでした")
+            except Exception as e:
+                print(f"   サイト情報取得エラー: {e}")
         else:
             print("❌ WordPress API接続失敗")
-            print(f"   エラー: {result.get('error', '不明なエラー')}")
     except Exception as e:
         print(f"❌ WordPress API接続エラー: {e}")
 
