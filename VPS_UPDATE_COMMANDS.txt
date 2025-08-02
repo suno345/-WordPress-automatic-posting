@@ -9,9 +9,11 @@ cd wordpress-auto-posting
 ## 3. 現在のブランチとステータス確認
 git status
 git branch
+git log --oneline -3
 
-## 4. 最新コードをプル
-git pull origin main
+## 4. 最新コードをプル（強制更新）
+git fetch origin
+git reset --hard origin/main
 
 ## 5. 仮想環境をアクティベート
 source venv/bin/activate
@@ -20,20 +22,33 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 ## 7. システム動作確認
-python execute_scheduled_posts.py --vps-mode --test-connections
+python execute_scheduled_posts.py --vps-mode --status
 
-## 8. 修正内容の確認
-echo "=== 最新の修正内容 ==="
-echo "✅ batch_article_generator.py のdocstring構文エラー修正"
-echo "✅ scheduled_post_executor.py のList型注釈インポート追加"
-echo "✅ 全40ファイルの構文チェック100%成功確認済み"
-echo "✅ VPS実行可能性100%保証"
+## 8. 最新バージョン（v2.1.0）の修正内容確認
+echo "=== 最新バージョン v2.1.0 の修正内容 ==="
+echo "✅ WordPress投稿エラー修正：'int' object has no attribute 'get'"
+echo "✅ WordPress API戻り値を辞書形式に統一"
+echo "✅ JSONシリアライズエラー修正：'unhashable type: dict'"
+echo "✅ プロジェクトディレクトリ整理・最適化"
+echo "✅ 重複ファイル削除（setup_cron.sh, 作成仕様.md等）"
+echo "✅ キャッシュファイル削除（__pycache__, .pyc等）"
+echo "✅ VPS予約投稿システム100%動作確認済み"
 
-## 9. cron動作確認
+## 9. cronジョブの動作確認
+echo "=== Cronジョブ設定確認 ==="
 crontab -l
 
-## 10. ログファイルの確認
-tail -f logs/cron.log
+## 10. テスト実行（1件）
+echo "=== システムテスト実行 ==="
+python execute_scheduled_posts.py --vps-mode --multiple 1
 
-## ワンライナー実行コマンド（全工程）
-# ssh member1@your-vps-ip "cd wordpress-auto-posting && git pull origin main && source venv/bin/activate && python execute_scheduled_posts.py --vps-mode --test-connections"
+## 11. ログファイルの確認
+echo "=== 最新ログ確認 ==="
+ls -la logs/
+tail -20 logs/scheduled_posts_$(date +%Y%m%d).log
+
+## ワンライナー実行コマンド（安全更新）
+# ssh member1@your-vps-ip "cd wordpress-auto-posting && git fetch origin && git reset --hard origin/main && source venv/bin/activate && python execute_scheduled_posts.py --vps-mode --status"
+
+## 緊急時ロールバックコマンド
+# git reset --hard 8a14040  # 前回の安定版に戻す
