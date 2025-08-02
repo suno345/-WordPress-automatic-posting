@@ -71,6 +71,12 @@ wp-config-*.php
 data/posted_works.json
 data/search_offset.json
 
+# Development and archive directories
+development/
+docs/archive/
+scripts/archive/
+scripts/legacy/
+
 # Logs
 logs/
 *.log
