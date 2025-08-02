@@ -623,3 +623,47 @@ class PostScheduleManager:
                 return candidate_time
         
         return None
+    
+    def reset_schedule_only(self) -> Dict:
+        """
+        投稿済み作品履歴を保持したまま、投稿スケジュールのみをリセット
+        
+        Returns:
+            リセット結果の統計情報
+        """
+        try:
+            # 現在のスケジュール状況を記録
+            total_scheduled = len([p for p in self.schedule_data.values() if p["status"] == "scheduled"])
+            total_in_progress = len([p for p in self.schedule_data.values() if p["status"] == "in_progress"])
+            total_completed = len(self.completed_posts)
+            total_failed = len(self.failed_posts)
+            
+            # スケジュールデータをクリア（投稿済み履歴は保持）
+            self.schedule_data.clear()
+            
+            # 進行中と失敗したスケジュールも念のためクリア
+            self.failed_posts.clear()
+            
+            # ファイルに保存
+            self._save_schedule()
+            self._save_failed_posts()
+            
+            logger.info(f"投稿スケジュールをリセット - 予約: {total_scheduled}件, 進行中: {total_in_progress}件削除")
+            
+            return {
+                "success": True,
+                "message": "投稿スケジュールのみをリセットしました（投稿済み履歴は保持）",
+                "cleared_scheduled": total_scheduled,
+                "cleared_in_progress": total_in_progress,
+                "cleared_failed": total_failed,
+                "preserved_completed": total_completed,
+                "reset_at": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"スケジュールリセットエラー: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "スケジュールリセットに失敗しました"
+            }

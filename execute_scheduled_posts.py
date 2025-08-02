@@ -50,6 +50,7 @@ def parse_arguments():
   python execute_scheduled_posts.py                # WordPress予約投稿状況をチェック
   python execute_scheduled_posts.py --status       # 詳細な予約投稿状況を表示
   python execute_scheduled_posts.py --vps-mode     # VPS最適化モードで実行
+  python execute_scheduled_posts.py --reset-schedule-only  # 投稿履歴保持でスケジュールのみリセット
   python execute_scheduled_posts.py --recover-failed # 失敗投稿の回復処理
         """
     )
@@ -95,6 +96,12 @@ def parse_arguments():
         '--test-connections',
         action='store_true',
         help='API接続テストを実行'
+    )
+    
+    parser.add_argument(
+        '--reset-schedule-only',
+        action='store_true',
+        help='投稿済み履歴を保持したまま投稿スケジュールのみをリセット'
     )
     
     return parser.parse_args()
@@ -159,6 +166,21 @@ def main():
             logger.info("失敗投稿の回復処理を開始")
             result = executor.recover_failed_posts()
             logger.info(f"回復処理完了: {result['rescheduled_count']}件を再スケジュール")
+            
+        elif args.reset_schedule_only:
+            # 投稿スケジュールのみリセット
+            logger.info("投稿スケジュールのみのリセットを開始")
+            result = executor.reset_schedule_only()
+            
+            if result["success"]:
+                print("✅ 投稿スケジュールリセット完了")
+                print(f"📅 予約投稿削除: {result['cleared_scheduled']}件")
+                print(f"🔄 進行中投稿削除: {result['cleared_in_progress']}件")
+                print(f"📋 投稿済み履歴保持: {result['preserved_completed']}件")
+                print("\n💡 次回実行時に新しいスケジュールが作成されます")
+            else:
+                print(f"❌ スケジュールリセット失敗: {result['message']}")
+                sys.exit(1)
             
         else:
             # WordPress予約投稿状況監視

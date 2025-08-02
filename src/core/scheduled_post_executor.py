@@ -410,3 +410,30 @@ class ScheduledPostExecutor:
                 logger.warning(f"タグ変換エラー '{name}': {e}")
         
         return tag_ids
+    
+    def reset_schedule_only(self) -> Dict:
+        """
+        投稿済み作品履歴を保持したまま、投稿スケジュールのみをリセット
+        
+        Returns:
+            リセット結果
+        """
+        try:
+            result = self.schedule_manager.reset_schedule_only()
+            
+            if result["success"]:
+                logger.info(f"スケジュールリセット完了: {result['message']}")
+            else:
+                logger.error(f"スケジュールリセット失敗: {result['message']}")
+            
+            return result
+            
+        except Exception as e:
+            error_message = f"スケジュールリセット中にエラー: {e}"
+            logger.error(error_message)
+            
+            return {
+                "success": False,
+                "error": str(e),
+                "message": error_message
+            }
