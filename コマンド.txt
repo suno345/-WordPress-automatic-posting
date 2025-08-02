@@ -1,8 +1,0 @@
-# WordPress auto-posting system - 15 minute intervals
-*/15 * * * * /home/member1/wordpress-auto-posting/venv/bin/python /home/member1/wordpress-auto-posting/execute_scheduled_posts.py --vps-mode --multiple 3 >> /home/member1/wordpress-auto-posting/logs/cron.log 2>&1
-
-# Daily system status check at midnight
-0 0 * * * /home/member1/wordpress-auto-posting/venv/bin/python /home/member1/wordpress-auto-posting/execute_scheduled_posts.py --vps-mode --status >> /home/member1/wordpress-auto-posting/logs/daily_status.log 2>&1
-
-# Weekly Git update on Sundays at 3 AM
-0 3 * * 0 cd /home/member1/wordpress-auto-posting && git pull origin main >> /home/member1/wordpress-auto-posting/logs/git_update.log 2>&1

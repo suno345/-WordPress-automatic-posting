@@ -47,14 +47,34 @@ def test_advance_schedule():
     remaining_slots = schedule_manager._get_remaining_daily_slots()
     print(f"今日の残り枠: {remaining_slots}件")
     
-    print(f"\n2. 15分刻み空き枠確認テスト")
-    available_slots = schedule_manager._calculate_next_15min_slots(3, remaining_slots)
-    print(f"利用可能な15分刻み枠: {len(available_slots)}件")
-    for i, slot in enumerate(available_slots):
-        print(f"  {i+1}. {slot.strftime('%Y-%m-%d %H:%M')}")
+    print(f"\n2. 既存の予約投稿をクリア")
+    schedule_manager.schedule_data = {}
+    schedule_manager._save_schedule()
     
-    print(f"\n3. 前倒し投稿スケジュール作成テスト")
-    test_articles = create_test_articles(3)
+    print(f"\n3. 過去時刻で即座実行可能なスケジュール作成")
+    test_articles = create_test_articles(1)
+    
+    # 現在時刻より5分前の時刻に設定
+    past_time = datetime.now() - timedelta(minutes=5)
+    past_time = past_time.replace(second=0, microsecond=0)
+    
+    # 手動でスケジュールを作成
+    schedule_id = f"test_{past_time.strftime('%Y%m%d_%H%M')}"
+    schedule_entry = {
+        "schedule_id": schedule_id,
+        "article_data": test_articles[0],
+        "post_time": past_time.isoformat(),
+        "priority": "high",
+        "created_at": datetime.now().isoformat(),
+        "attempts": 0,
+        "status": "scheduled"
+    }
+    
+    schedule_manager.schedule_data[schedule_id] = schedule_entry
+    schedule_manager._save_schedule()
+    
+    print(f"テスト投稿予定時刻: {past_time.strftime('%Y-%m-%d %H:%M')}")
+    print(f"スケジュールID: {schedule_id}")
     
     try:
         schedule_info = schedule_manager.create_advance_schedule(test_articles)
