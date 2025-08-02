@@ -144,5 +144,61 @@
       "title": "テスト作品1【テストサークル1・テスト作者1】"
     },
     "final_attempts": 1
+  },
+  "test_20250802_1232": {
+    "schedule_id": "test_20250802_1232",
+    "article_data": {
+      "work_data": {
+        "work_id": "test_work_1",
+        "title": "テスト作品1",
+        "circle_name": "テストサークル1",
+        "author_name": "テスト作者1",
+        "description": "これはテスト用の作品1です。"
+      },
+      "rewritten_description": "リライトされたテスト説明文1",
+      "article_content": "完全なテスト記事内容1"
+    },
+    "post_time": "2025-08-02T12:32:00",
+    "priority": "high",
+    "created_at": "2025-08-02T12:37:04.089781",
+    "attempts": 1,
+    "status": "completed",
+    "completed_at": "2025-08-02T12:54:18.755633",
+    "post_result": {
+      "success": true,
+      "post_id": 5329,
+      "post_url": "https://mania-wiki.com/?p=5329",
+      "execution_time": 0.30013,
+      "title": "テスト作品1【テストサークル1・テスト作者1】"
+    },
+    "final_attempts": 1
+  },
+  "advance_20250802_1245_c22e6b68": {
+    "schedule_id": "advance_20250802_1245_c22e6b68",
+    "article_data": {
+      "work_data": {
+        "work_id": "test_work_1",
+        "title": "テスト作品1",
+        "circle_name": "テストサークル1",
+        "author_name": "テスト作者1",
+        "description": "これはテスト用の作品1です。"
+      },
+      "rewritten_description": "リライトされたテスト説明文1",
+      "article_content": "完全なテスト記事内容1"
+    },
+    "post_time": "2025-08-02T12:45:00",
+    "priority": "high",
+    "created_at": "2025-08-02T12:37:04.090351",
+    "attempts": 1,
+    "status": "completed",
+    "completed_at": "2025-08-02T12:55:24.652839",
+    "post_result": {
+      "success": true,
+      "post_id": 5330,
+      "post_url": "https://mania-wiki.com/?p=5330",
+      "execution_time": 0.309172,
+      "title": "テスト作品1【テストサークル1・テスト作者1】"
+    },
+    "final_attempts": 1
   }
 }

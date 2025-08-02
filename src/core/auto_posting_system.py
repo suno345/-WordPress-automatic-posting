@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
-from ..config.config_manager import ConfigManager
+from ..config.simple_config_manager import SimpleConfigManager
 from ..api.dmm_api import DMMAPIClient
 from ..api.gemini_api import GeminiAPI
 from ..api.wordpress_api import WordPressAPI
@@ -24,12 +24,12 @@ logger = logging.getLogger(__name__)
 class AutoPostingSystem:
     """WordPress自動投稿システム（リファクタリング版）"""
     
-    def __init__(self, config_file: str = 'config/config.ini', verbose: bool = False, skip_review_check: bool = False):
+    def __init__(self, config_file: Optional[str] = None, verbose: bool = False, skip_review_check: bool = False):
         """
         自動投稿システムの初期化
         
         Args:
-            config_file: 設定ファイルのパス
+            config_file: 設定ファイルのパス（Noneの場合は.envを使用）
             verbose: 詳細ログを出力するか
             skip_review_check: レビューチェックをスキップするか（テスト用）
         
@@ -39,8 +39,8 @@ class AutoPostingSystem:
         self.verbose = verbose
         self.skip_review_check = skip_review_check
         try:
-            # 設定を読み込み
-            self.config = ConfigManager(config_file)
+            # 設定を読み込み（簡素化設定管理）
+            self.config = SimpleConfigManager()
             
             # ログ設定
             self.logger = setup_logging(self.config.system.log_level)

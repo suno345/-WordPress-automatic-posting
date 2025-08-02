@@ -16,7 +16,7 @@ sys.path.insert(0, str(project_root))
 
 from src.core.auto_posting_system import AutoPostingSystem
 from src.services.exceptions import AutoPostingError, ConfigurationError
-from src.config.secure_config_manager import SecureConfigManager
+from src.config.simple_config_manager import SimpleConfigManager
 
 
 def parse_arguments():
@@ -78,15 +78,15 @@ def main():
         # コマンドライン引数の解析
         args = parse_arguments()
         
-        # VPSモードの場合は設定ファイルを自動変更
-        config_file = args.config
+        # VPSモードの場合は環境変数を設定
         if args.vps_mode:
-            config_file = 'config/config.vps.ini'
-            print(f"VPSモード: {config_file} を使用")
+            import os
+            os.environ['VPS_MODE'] = 'true'
+            print("VPSモード: .env設定を使用")
         
-        # システムの初期化
+        # システムの初期化（簡素化設定管理）
         system = AutoPostingSystem(
-            config_file=config_file,
+            config_file=None,  # .envファイルを直接使用
             verbose=args.verbose,
             skip_review_check=getattr(args, 'skip_review_check', False)
         )

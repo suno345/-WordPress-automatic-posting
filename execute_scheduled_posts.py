@@ -19,7 +19,7 @@ sys.path.insert(0, str(project_root))
 from src.core.scheduled_post_executor import ScheduledPostExecutor
 from src.api.wordpress_api import WordPressAPI
 from src.core.post_manager import PostManager
-from src.config.secure_config_manager import SecureConfigManager
+from src.config.simple_config_manager import SimpleConfigManager
 from src.services.exceptions import AutoPostingError, ConfigurationError
 
 # ログ設定
@@ -101,22 +101,20 @@ def main():
         # コマンドライン引数の解析
         args = parse_arguments()
         
-        # VPSモードの場合は設定ファイルを自動変更
-        config_file = args.config
+        # VPSモードの場合は環境変数を設定
         if args.vps_mode:
-            config_file = 'config/config.vps.ini'
             # VPSモードを環境変数に設定
             import os
             os.environ['VPS_MODE'] = 'true'
-            logger.info(f"VPSモード: {config_file} を使用")
+            logger.info("VPSモード: .env設定を使用")
         
         # 詳細ログ設定
         if args.verbose:
             logging.getLogger().setLevel(logging.DEBUG)
             logger.info("詳細ログモードを有効化")
         
-        # 設定の読み込み
-        config_manager = SecureConfigManager(config_file)
+        # 設定の読み込み（簡素化設定管理）
+        config_manager = SimpleConfigManager()
         wp_config = config_manager.wordpress
         
         # WordPress APIクライアントの初期化
