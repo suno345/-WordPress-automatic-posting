@@ -1,58 +1,56 @@
-# VPS 本番記事生成・投稿テストコマンド（簡素化版 v2.3.1）
+# VPS 本番記事生成・投稿テストコマンド（簡素化版 v2.3.2）
 
-# 方法0: 最新バージョンを取得
+# 方法0: 状況リセット（必要に応じて）
+# Ctrl+C で現在の入力をキャンセル
+# rm -f real_post_test_simple.py で不完全ファイルを削除
+
+# 方法1: 最新バージョンを取得
 git pull origin main
 
-# 方法1: 接続テスト（簡素化設定システムで確認）
+# 方法2: 接続テスト（簡素化設定システムで確認）
 echo "🔧 簡素化設定システム接続テスト..."
 python execute_scheduled_posts.py --test-connections
 
-# 方法2: 実際の作品データで記事生成テスト（修正版）
-cat > real_post_test_simple.py << 'EOF'
+# 方法3: 本番記事生成テスト（安全なワンライナー版）
+echo "🎯 本番記事生成テスト開始（簡素化版）..."
+python -c "
 from src.api.dmm_api import DMMAPIClient
 from src.api.gemini_api import GeminiAPI
 from src.core.post_schedule_manager import PostScheduleManager
 from src.config.simple_config_manager import SimpleConfigManager
 from datetime import datetime, timedelta
-import os
 
-print("🎯 本番記事生成テスト開始（簡素化版）...")
+print('🎯 本番記事生成テスト開始（簡素化版）...')
 
 try:
-    # 簡素化設定管理システムを使用
     config = SimpleConfigManager()
-    print("✅ 簡素化設定システム初期化完了")
+    print('✅ 簡素化設定システム初期化完了')
     
-    # API設定を直接取得
     dmm_config = config.dmm_api
     gemini_config = config.gemini
     
-    print(f"DMM API ID: {dmm_config.api_id}")
-    print(f"Gemini APIキー: {gemini_config.api_key[:10]}...")
+    print(f'DMM API ID: {dmm_config.api_id}')
+    print(f'Gemini APIキー: {gemini_config.api_key[:10]}...')
     
-    # APIクライアント初期化
     dmm_client = DMMAPIClient(dmm_config.api_id, dmm_config.affiliate_id)
     gemini_api = GeminiAPI(api_key=gemini_config.api_key)
-
-    # ジャンルフィルター有効で作品取得
+    
     items = dmm_client.get_items(limit=5, offset=1, use_genre_filter=True)
-    print("取得アイテム数:", len(items))
-
+    print('取得アイテム数:', len(items))
+    
     if items:
         for item in items:
             work_data = dmm_client.convert_to_work_data(item, skip_review_check=True)
             if work_data:
-                title = work_data["title"]
-                print(f"✅ 作品変換成功: {title}")
+                title = work_data['title']
+                print(f'✅ 作品変換成功: {title}')
                 
-                # 記事生成
                 article = gemini_api.rewrite_description(
-                    title=work_data["title"], 
-                    original_description=work_data["description"]
+                    title=work_data['title'], 
+                    original_description=work_data['description']
                 )
                 
                 if article:
-                    # 予約投稿設定
                     schedule_manager = PostScheduleManager(config)
                     target_time = datetime.now() + timedelta(minutes=2)
                     schedule_id = schedule_manager.add_to_schedule(
@@ -60,50 +58,48 @@ try:
                         article_content=article, 
                         scheduled_time=target_time
                     )
-                    time_str = target_time.strftime("%H:%M:%S")
-                    print(f"🎉 予約投稿設定完了: {schedule_id}")
-                    print(f"📅 投稿予定: {time_str}")
-                    print(f"📝 作品: {title}")
-                    print(f"📄 記事プレビュー: {article[:100]}...")
+                    time_str = target_time.strftime('%H:%M:%S')
+                    print(f'🎉 予約投稿設定完了: {schedule_id}')
+                    print(f'📅 投稿予定: {time_str}')
+                    print(f'📝 作品: {title}')
+                    print(f'📄 記事プレビュー: {article[:100]}...')
                     break
                 else:
-                    print(f"⚠️ 記事生成失敗（Geminiブロック）: {title}")
+                    print(f'⚠️ 記事生成失敗（Geminiブロック）: {title}')
                     continue
     else:
-        print("❌ 作品取得失敗")
-
+        print('❌ 作品取得失敗')
+        
 except Exception as e:
-    print(f"❌ エラー発生: {e}")
+    print(f'❌ エラー発生: {e}')
     import traceback
     traceback.print_exc()
-EOF
+"
 
-python real_post_test_simple.py
-rm real_post_test_simple.py
-
-# 方法3: 予約投稿実行（2分後）
+# 方法4: 予約投稿実行（2分後）
 echo ""
 echo "⏰ 2分後に以下コマンドで投稿実行："
 echo "python execute_scheduled_posts.py --vps-mode --multiple 1"
 echo ""
 
-# 方法4: 現在の予約状況確認
+# 方法5: 現在の予約状況確認
 echo "📋 現在の予約状況:"
 python execute_scheduled_posts.py --vps-mode --status
 
-# 方法5: ログ確認
+# 方法6: ログ確認
 echo ""
 echo "📄 最新ログ:"
 tail -10 logs/auto_post_$(date +%Y%m%d).log 2>/dev/null || echo "ログファイルが見つかりません"
 
-# 方法6: システム状況確認（簡素化版）
+# 方法7: システム状況確認（簡素化版）
 echo ""
 echo "💻 システム状況:"
 echo "設定システム: 簡素化版（.env直接読み込み）"
 echo "config.ini: 削除済み"
-echo "バージョン: v2.3.1（メソッド名修正版）"
+echo "バージョン: v2.3.2（安全実行版）"
 echo ""
 echo "📋 修正内容:"
-echo "- PostScheduleManagerメソッド名修正: schedule_post → add_to_schedule"
+echo "- catコマンドでのファイル作成を安全なpython -c ワンライナーに変更"
+echo "- PostScheduleManagerメソッド名修正済み: add_to_schedule"
 echo "- Geminiブロック時の適切なエラーハンドリング追加"
-echo "- VPS環境での安定動作確認済み"
+echo "- VPS環境での中断問題を解決"
