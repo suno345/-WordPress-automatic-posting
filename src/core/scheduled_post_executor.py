@@ -10,6 +10,7 @@ from .post_schedule_manager import PostScheduleManager
 from ..api.wordpress_api import WordPressAPI
 from ..core.post_manager import PostManager
 from ..services.exceptions import AutoPostingError
+from ..utils.constants import DefaultValues
 
 logger = logging.getLogger(__name__)
 
@@ -313,3 +314,99 @@ class ScheduledPostExecutor:
                 "error": str(e),
                 "last_updated": datetime.now().isoformat()
             }
+    
+    def _generate_article_title(self, work_data: Dict) -> str:
+        """
+        記事タイトルを生成（作者名を含む）
+        
+        Args:
+            work_data: 作品データ
+        
+        Returns:
+            作者名を含む記事タイトル
+        """
+        work_title = work_data.get('title', '')
+        if not work_title:
+            return 'タイトル不明'
+        
+        # 作者名またはサークル名を取得
+        author_name = work_data.get('author_name')
+        circle_name = work_data.get('circle_name')
+        
+        # 作者名が有効で、サークル名と異なる場合は作者名を使用
+        if (author_name and 
+            author_name != DefaultValues.CIRCLE_NAME_UNKNOWN and 
+            author_name != circle_name):
+            creator_name = author_name
+        # そうでなければサークル名を使用
+        elif circle_name and circle_name != DefaultValues.CIRCLE_NAME_UNKNOWN:
+            creator_name = circle_name
+        else:
+            # 作者情報が不明な場合はタイトルのみ
+            return work_title
+        
+        # タイトルに作者名を含める
+        return f"{work_title}【{creator_name}】"
+    
+    def _get_categories(self, work_data: Dict) -> List[str]:
+        """カテゴリリストを準備"""
+        genres = work_data.get('genres', [])
+        
+        if genres and len(genres) > 0:
+            category = genres  # 全てのジャンルをリストとして使用
+        elif work_data.get('category'):
+            category = [work_data.get('category')]  # 単一カテゴリもリスト化
+        else:
+            category = [DefaultValues.DEFAULT_CATEGORY]  # デフォルト: ['同人']
+        
+        return category
+    
+    def _get_tags(self, work_data: Dict) -> List[str]:
+        """タグリストを準備（作者名・サークル名のみ）"""
+        tags = []
+        
+        # サークル名をタグに追加
+        circle_name = work_data.get('circle_name')
+        if circle_name and circle_name != DefaultValues.CIRCLE_NAME_UNKNOWN:
+            tags.append(circle_name)
+        
+        # 作者名をタグに追加（サークル名と異なる場合のみ）
+        author_name = work_data.get('author_name')
+        if (author_name and 
+            author_name != DefaultValues.CIRCLE_NAME_UNKNOWN and 
+            author_name != circle_name):
+            tags.append(author_name)
+        
+        return tags
+    
+    def _convert_categories_to_ids(self, category_names: List[str]) -> List[int]:
+        """カテゴリ名をIDに変換"""
+        if not self.wp_api:
+            return []
+        
+        category_ids = []
+        for name in category_names:
+            try:
+                category_id = self.wp_api.get_or_create_category(name)
+                if category_id:
+                    category_ids.append(category_id)
+            except Exception as e:
+                logger.warning(f"カテゴリ変換エラー '{name}': {e}")
+        
+        return category_ids
+    
+    def _convert_tags_to_ids(self, tag_names: List[str]) -> List[int]:
+        """タグ名をIDに変換"""
+        if not self.wp_api:
+            return []
+        
+        tag_ids = []
+        for name in tag_names:
+            try:
+                tag_id = self.wp_api.get_or_create_tag(name)
+                if tag_id:
+                    tag_ids.append(tag_id)
+            except Exception as e:
+                logger.warning(f"タグ変換エラー '{name}': {e}")
+        
+        return tag_ids
