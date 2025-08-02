@@ -69,6 +69,7 @@ wp-config-*.php
 
 # Data files
 data/posted_works.json
+data/search_offset.json
 
 # Logs
 logs/
