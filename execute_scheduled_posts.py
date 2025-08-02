@@ -16,6 +16,10 @@ load_dotenv()
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+# ログディレクトリ作成
+logs_dir = project_root / 'logs'
+logs_dir.mkdir(exist_ok=True)
+
 from src.core.scheduled_post_executor import ScheduledPostExecutor
 from src.api.wordpress_api import WordPressAPI
 from src.core.post_manager import PostManager
@@ -23,11 +27,12 @@ from src.config.simple_config_manager import SimpleConfigManager
 from src.services.exceptions import AutoPostingError, ConfigurationError
 
 # ログ設定
+log_file_path = logs_dir / f'scheduled_posts_{datetime.now().strftime("%Y%m%d")}.log'
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(f'logs/scheduled_posts_{datetime.now().strftime("%Y%m%d")}.log'),
+        logging.FileHandler(str(log_file_path)),
         logging.StreamHandler()
     ]
 )
