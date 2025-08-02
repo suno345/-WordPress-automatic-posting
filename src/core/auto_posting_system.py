@@ -234,7 +234,7 @@ class AutoPostingSystem:
                     article_data = {
                         "work_data": work_data,
                         "rewritten_description": rewritten_description,
-                        "article_content": self.article_gen.generate_complete_article(work_data, rewritten_description)
+                        "article_content": self.article_gen.generate_article_content(work_data, rewritten_description)
                     }
                     articles.append(article_data)
                     

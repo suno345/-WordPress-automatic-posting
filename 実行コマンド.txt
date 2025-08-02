@@ -1,105 +1,91 @@
-# VPS 本番記事生成・投稿テストコマンド（簡素化版 v2.3.2）
+# VPS cronパス問題緊急修正（v2.4.1 修正版）
 
-# 方法0: 状況リセット（必要に応じて）
-# Ctrl+C で現在の入力をキャンセル
-# rm -f real_post_test_simple.py で不完全ファイルを削除
-
-# 方法1: 最新バージョンを取得
-git pull origin main
-
-# 方法2: 接続テスト（簡素化設定システムで確認）
-echo "🔧 簡素化設定システム接続テスト..."
-python execute_scheduled_posts.py --test-connections
-
-# 方法3: 本番記事生成テスト（安全なワンライナー版）
-echo "🎯 本番記事生成テスト開始（簡素化版）..."
-python -c "
-from src.api.dmm_api import DMMAPIClient
-from src.api.gemini_api import GeminiAPI
-from src.core.post_schedule_manager import PostScheduleManager
-from src.config.simple_config_manager import SimpleConfigManager
-from datetime import datetime, timedelta
-
-print('🎯 本番記事生成テスト開始（簡素化版）...')
-
-try:
-    config = SimpleConfigManager()
-    print('✅ 簡素化設定システム初期化完了')
-    
-    dmm_config = config.dmm_api
-    gemini_config = config.gemini
-    
-    print(f'DMM API ID: {dmm_config.api_id}')
-    print(f'Gemini APIキー: {gemini_config.api_key[:10]}...')
-    
-    dmm_client = DMMAPIClient(dmm_config.api_id, dmm_config.affiliate_id)
-    gemini_api = GeminiAPI(api_key=gemini_config.api_key)
-    
-    items = dmm_client.get_items(limit=5, offset=1, use_genre_filter=True)
-    print('取得アイテム数:', len(items))
-    
-    if items:
-        for item in items:
-            work_data = dmm_client.convert_to_work_data(item, skip_review_check=True)
-            if work_data:
-                title = work_data['title']
-                print(f'✅ 作品変換成功: {title}')
-                
-                article = gemini_api.rewrite_description(
-                    title=work_data['title'], 
-                    original_description=work_data['description']
-                )
-                
-                if article:
-                    schedule_manager = PostScheduleManager(config)
-                    target_time = datetime.now() + timedelta(minutes=2)
-                    schedule_id = schedule_manager.add_to_schedule(
-                        work_data=work_data, 
-                        article_content=article, 
-                        scheduled_time=target_time
-                    )
-                    time_str = target_time.strftime('%H:%M:%S')
-                    print(f'🎉 予約投稿設定完了: {schedule_id}')
-                    print(f'📅 投稿予定: {time_str}')
-                    print(f'📝 作品: {title}')
-                    print(f'📄 記事プレビュー: {article[:100]}...')
-                    break
-                else:
-                    print(f'⚠️ 記事生成失敗（Geminiブロック）: {title}')
-                    continue
-    else:
-        print('❌ 作品取得失敗')
-        
-except Exception as e:
-    print(f'❌ エラー発生: {e}')
-    import traceback
-    traceback.print_exc()
-"
-
-# 方法4: 予約投稿実行（2分後）
-echo ""
-echo "⏰ 2分後に以下コマンドで投稿実行："
-echo "python execute_scheduled_posts.py --vps-mode --multiple 1"
-echo ""
-
-# 方法5: 現在の予約状況確認
-echo "📋 現在の予約状況:"
+# 方法1: 現在の予約状況詳細確認
+echo "📋 現在の予約状況詳細確認..."
 python execute_scheduled_posts.py --vps-mode --status
 
-# 方法6: ログ確認
+# 方法2: 予約投稿ファイルの直接確認
 echo ""
-echo "📄 最新ログ:"
-tail -10 logs/auto_post_$(date +%Y%m%d).log 2>/dev/null || echo "ログファイルが見つかりません"
+echo "📁 予約投稿ファイル確認..."
+python -c "
+import json
+from pathlib import Path
+from datetime import datetime
 
-# 方法7: システム状況確認（簡素化版）
+# 予約投稿ファイルのパスを確認
+schedule_file = Path('data/schedule/post_schedule.json')
+if schedule_file.exists():
+    with open(schedule_file, 'r', encoding='utf-8') as f:
+        schedule_data = json.load(f)
+    
+    print('📅 予約投稿データ:')
+    for date, posts in schedule_data.items():
+        print(f'  日付: {date}')
+        for post_id, post_data in posts.items():
+            title = post_data.get('work_data', {}).get('title', '不明')
+            scheduled_time = post_data.get('scheduled_time', '不明')
+            status = post_data.get('status', '不明')
+            print(f'    - {post_id}: {title}')
+            print(f'      予定時刻: {scheduled_time}')
+            print(f'      ステータス: {status}')
+else:
+    print('❌ 予約投稿ファイルが見つかりません')
+
+# 完了投稿ファイルも確認
+completed_file = Path('data/schedule/completed_posts.json')
+if completed_file.exists():
+    with open(completed_file, 'r', encoding='utf-8') as f:
+        completed_data = json.load(f)
+    
+    print('')
+    print('✅ 完了投稿データ:')
+    for post_id, post_data in completed_data.items():
+        title = post_data.get('work_data', {}).get('title', '不明')
+        completed_time = post_data.get('completed_at', '不明')
+        print(f'    - {post_id}: {title} (完了: {completed_time})')
+else:
+    print('📝 完了投稿ファイルなし')
+"
+
+# 方法3: cronログ確認
 echo ""
-echo "💻 システム状況:"
-echo "設定システム: 簡素化版（.env直接読み込み）"
-echo "config.ini: 削除済み"
-echo "バージョン: v2.3.2（安全実行版）"
+echo "📄 cronログ確認（最新20行）..."
+tail -20 logs/cron.log 2>/dev/null || echo "cronログファイルが見つかりません"
+
+# 方法4: 今日の自動投稿ログ確認
 echo ""
-echo "📋 修正内容:"
-echo "- catコマンドでのファイル作成を安全なpython -c ワンライナーに変更"
-echo "- PostScheduleManagerメソッド名修正済み: add_to_schedule"
-echo "- Geminiブロック時の適切なエラーハンドリング追加"
-echo "- VPS環境での中断問題を解決"
+echo "📄 今日の自動投稿ログ確認..."
+tail -30 logs/auto_post_$(date +%Y%m%d).log 2>/dev/null || echo "今日の自動投稿ログファイルが見つかりません"
+
+# 方法5: cronジョブ設定確認
+echo ""
+echo "⏰ cronジョブ設定確認..."
+crontab -l | grep wordpress-auto-posting || echo "cronジョブが設定されていません"
+
+# 方法6: 手動で予約投稿実行テスト
+echo ""
+echo "🔧 手動予約投稿実行テスト..."
+python execute_scheduled_posts.py --vps-mode --multiple 1
+
+# 方法7: 予約投稿実行後の状況再確認
+echo ""
+echo "📋 実行後の予約状況確認..."
+python execute_scheduled_posts.py --vps-mode --status
+
+# 方法8: システム状況サマリー
+echo ""
+echo "💻 調査結果サマリー:"
+echo "バージョン: v2.4.0（調査版）"
+echo "目的: VPS予約投稿失敗の原因特定"
+echo ""
+echo "📋 調査項目:"
+echo "1. 予約投稿データの存在確認"
+echo "2. cronジョブの設定と実行状況"
+echo "3. ログファイルのエラー確認"
+echo "4. 手動実行での動作テスト"
+echo ""
+echo "🔍 予想される原因:"
+echo "- cronジョブが動作していない"
+echo "- 予約投稿データの形式問題"
+echo "- 時刻判定のロジック問題"
+echo "- 権限やパスの問題"
