@@ -3,8 +3,9 @@
 # VPS用cron設定スクリプト
 # 15分間隔で96件/日の自動投稿を設定
 
-PROJECT_ROOT="/opt/blog-automation"
-SCRIPT_PATH="$PROJECT_ROOT/scripts/vps_auto_posting.sh"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHON_VENV="$PROJECT_ROOT/venv/bin/python"
+MAIN_SCRIPT="$PROJECT_ROOT/execute_scheduled_posts.py"
 LOG_FILE="$PROJECT_ROOT/logs/cron.log"
 
 echo "=== VPS用cron設定開始 ==="
@@ -31,16 +32,16 @@ cat >> "$TEMP_CRON" << EOF
 
 # WordPress自動投稿システム - 15分間隔実行（96件/日）
 # 毎日00:00, 00:15, 00:30, ... 23:45に実行
-*/15 * * * * $SCRIPT_PATH >> $LOG_FILE 2>&1
+*/15 * * * * cd $PROJECT_ROOT && $PYTHON_VENV $MAIN_SCRIPT --vps-mode --multiple 1 >> $LOG_FILE 2>&1
 
-# 日次メンテナンス - 毎日1:00に実行
-0 1 * * * $PROJECT_ROOT/scripts/daily_maintenance.sh >> $LOG_FILE 2>&1
+# 日次ステータス確認 - 毎日1:00に実行
+0 1 * * * cd $PROJECT_ROOT && $PYTHON_VENV $MAIN_SCRIPT --vps-mode --status >> $PROJECT_ROOT/logs/daily_status.log 2>&1
 
-# 週次メンテナンス - 毎週日曜日2:00に実行  
-0 2 * * 0 $PROJECT_ROOT/scripts/weekly_maintenance.sh >> $LOG_FILE 2>&1
+# 週次メンテナンス - 毎週日曜日2:00にGit更新
+0 2 * * 0 cd $PROJECT_ROOT && git pull origin main >> $PROJECT_ROOT/logs/git_update.log 2>&1
 
-# ヘルスチェック - 毎時0分に実行
-0 * * * * $PROJECT_ROOT/scripts/health_check.sh >> $LOG_FILE 2>&1
+# 月次バックアップ - 毎月1日3:00にデータベースバックアップ
+0 3 1 * * cp $PROJECT_ROOT/data/posts.db $PROJECT_ROOT/data/backup_\$(date +\%Y\%m\%d)_posts.db 2>> $LOG_FILE
 
 EOF
 
@@ -85,12 +86,19 @@ printf "次回実行時刻: %s %02d:%02d\n" "$next_date" "$next_hour" "$next_min
 # 権限確認
 echo ""
 echo "=== 権限確認 ==="
-if [ -x "$SCRIPT_PATH" ]; then
-    echo "✅ スクリプト実行権限: OK"
+if [ -x "$MAIN_SCRIPT" ]; then
+    echo "✅ メインスクリプト実行権限: OK"
 else
-    echo "❌ スクリプト実行権限: NG"
-    chmod +x "$SCRIPT_PATH"
+    echo "❌ メインスクリプト実行権限: NG"
+    chmod +x "$MAIN_SCRIPT"
     echo "✅ 実行権限を付与しました"
+fi
+
+if [ -x "$PYTHON_VENV" ]; then
+    echo "✅ Python仮想環境: OK"
+else
+    echo "❌ Python仮想環境: NG ($PYTHON_VENV)"
+    echo "仮想環境の作成が必要です: python3 -m venv venv"
 fi
 
 # ディレクトリ権限確認
@@ -124,7 +132,8 @@ echo "スクリプトのテスト実行を行いますか？ (y/N)"
 read -r response
 if [[ "$response" =~ ^[Yy]$ ]]; then
     echo "テスト実行中..."
-    "$SCRIPT_PATH"
+    cd "$PROJECT_ROOT"
+    "$PYTHON_VENV" "$MAIN_SCRIPT" --vps-mode --multiple 1
     echo "テスト実行完了"
 fi
 

@@ -1,0 +1,52 @@
+# VPS用15分間隔cron設定コマンド集
+
+## 1. ワンライナー設定（推奨）
+# ローカルファイルをVPSで実行
+scp VPS_CRON_SETUP.sh member1@your-vps-ip:~/
+ssh member1@your-vps-ip "chmod +x ~/VPS_CRON_SETUP.sh && ~/VPS_CRON_SETUP.sh"
+
+## 2. リモート直接実行
+ssh member1@your-vps-ip "bash -s" < VPS_CRON_SETUP.sh
+
+## 3. VPS上で手動設定
+ssh member1@your-vps-ip
+cd wordpress-auto-posting
+./scripts/setup_cron.sh
+
+## 4. 設定確認コマンド
+ssh member1@your-vps-ip "crontab -l"
+
+## 5. ログ監視コマンド
+ssh member1@your-vps-ip "tail -f wordpress-auto-posting/logs/cron.log"
+
+## 6. 今すぐテスト実行
+ssh member1@your-vps-ip "cd wordpress-auto-posting && venv/bin/python execute_scheduled_posts.py --vps-mode --multiple 1"
+
+## 7. cron削除（必要時）
+ssh member1@your-vps-ip "crontab -r"
+
+## 8. 最新コード更新 + cron設定
+ssh member1@your-vps-ip "cd wordpress-auto-posting && git pull origin main && ./scripts/setup_cron.sh"
+
+## 9. 簡易状況確認
+ssh member1@your-vps-ip "cd wordpress-auto-posting && crontab -l && echo '--- Latest Log ---' && tail -5 logs/cron.log"
+
+## 10. VPS完全リセット + 再設定
+ssh member1@your-vps-ip "cd wordpress-auto-posting && crontab -r && git reset --hard origin/main && ./scripts/setup_cron.sh"
+
+## cronパターン説明
+# */15 * * * * = 15分間隔（1日96回）
+# 00:00, 00:15, 00:30, 00:45, 01:00, ... 23:45
+
+## 期待される動作
+# - 1回の実行で1件投稿
+# - 15分間隔で継続実行
+# - 1日96件の投稿（予約されている場合）
+# - エラー時は次回実行で再試行
+
+## トラブルシューティング
+# cron動作しない場合:
+# 1. cronサービス確認: systemctl status cron
+# 2. ログ確認: tail -f /var/log/syslog | grep CRON
+# 3. 権限確認: ls -la execute_scheduled_posts.py
+# 4. Python環境確認: venv/bin/python --version
