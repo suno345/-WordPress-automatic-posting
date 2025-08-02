@@ -63,7 +63,7 @@ class WordPressAPI(SessionMixin):
         status: str = 'future', 
         scheduled_date: Optional[datetime] = None,
         slug: Optional[str] = None
-    ) -> Optional[int]:
+    ) -> Dict[str, Union[bool, int, str]]:
         """
         WordPressに記事を投稿
         
@@ -77,7 +77,7 @@ class WordPressAPI(SessionMixin):
             slug: URLスラッグ（商品IDなど）
         
         Returns:
-            投稿ID、失敗時はNone
+            投稿結果の辞書 (success, post_id, post_url, error)
         
         Raises:
             WordPressAPIError: API呼び出しに失敗した場合
@@ -103,22 +103,41 @@ class WordPressAPI(SessionMixin):
             response = self.session.post(f"{self.api_url}/posts", json=post_data)
             
             if response.status_code == 201:
-                post_id = response.json().get('id')
+                post_data_response = response.json()
+                post_id = post_data_response.get('id')
+                post_url = post_data_response.get('link', '')
                 logger.info(f"Successfully created post: {title} (ID: {post_id})")
-                return post_id
+                
+                return {
+                    "success": True,
+                    "post_id": post_id,
+                    "post_url": post_url
+                }
             else:
                 error_msg = f"Failed to create post: {response.status_code} - {response.text}"
                 logger.error(error_msg)
-                raise WordPressAPIError(error_msg)
+                
+                return {
+                    "success": False,
+                    "error": error_msg
+                }
                 
         except requests.exceptions.RequestException as e:
             error_msg = f"Network error creating post: {e}"
             logger.error(error_msg)
-            raise WordPressAPIError(error_msg)
+            
+            return {
+                "success": False,
+                "error": error_msg
+            }
         except Exception as e:
             error_msg = f"Unexpected error creating post: {e}"
             logger.error(error_msg)
-            raise WordPressAPIError(error_msg)
+            
+            return {
+                "success": False,
+                "error": error_msg
+            }
     
     def get_or_create_category(self, category_name: str) -> Optional[int]:
         """

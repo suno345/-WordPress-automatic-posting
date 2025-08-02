@@ -90,11 +90,24 @@ class ScheduledPostExecutor:
             
             if post_result["success"]:
                 # 投稿成功
-                self.schedule_manager.mark_post_completed(schedule_id, post_result)
+                try:
+                    self.schedule_manager.mark_post_completed(schedule_id, post_result)
+                except Exception as e:
+                    logger.error(f"mark_post_completed でエラー: {e}")
+                    logger.error(f"schedule_id: {schedule_id}")
+                    logger.error(f"post_result: {post_result}")
+                    import traceback
+                    logger.error(f"スタックトレース: {traceback.format_exc()}")
+                    raise
                 
                 # 投稿済み作品として記録
                 if self.post_manager:
-                    self.post_manager.mark_as_posted(work_data)
+                    try:
+                        self.post_manager.mark_as_posted(work_data["work_id"])
+                    except Exception as e:
+                        logger.error(f"mark_as_posted でエラー: {e}")
+                        logger.error(f"work_data: {work_data}")
+                        raise
                 
                 # 実行時間を記録
                 execution_time = (datetime.now() - execution_start).total_seconds()

@@ -380,27 +380,47 @@ class PostScheduleManager:
         
         post_info = self.schedule_data[schedule_id]
         
-        # 完了データ作成
-        completed_entry = {
-            **post_info,
-            "status": "completed",
-            "completed_at": datetime.now().isoformat(),
-            "post_result": post_result,
-            "final_attempts": post_info.get("attempts", 0)
-        }
-        
-        # 完了リストに追加
-        self.completed_posts[schedule_id] = completed_entry
-        
-        # スケジュールから削除
-        del self.schedule_data[schedule_id]
-        
-        # 保存
-        self._save_schedule()
-        self._save_completed_posts()
-        
-        logger.info(f"投稿完了: {post_info['article_data']['work_data']['title']}")
-        return True
+        try:
+            # post_resultをJSONシリアライズ可能な形式に変換
+            serializable_post_result = {}
+            for key, value in post_result.items():
+                if isinstance(value, (str, int, float, bool, type(None))):
+                    serializable_post_result[key] = value
+                else:
+                    serializable_post_result[key] = str(value)
+            
+            # 完了データ作成（スプレッド演算子を使わずに明示的にコピー）
+            completed_entry = {
+                "schedule_id": schedule_id,
+                "article_data": post_info.get("article_data"),
+                "post_time": post_info.get("post_time"),
+                "priority": post_info.get("priority", "normal"),
+                "created_at": post_info.get("created_at"),
+                "attempts": post_info.get("attempts", 0),
+                "status": "completed",
+                "completed_at": datetime.now().isoformat(),
+                "post_result": serializable_post_result,
+                "final_attempts": post_info.get("attempts", 0)
+            }
+            
+            # 完了リストに追加
+            self.completed_posts[schedule_id] = completed_entry
+            
+            # スケジュールから削除
+            del self.schedule_data[schedule_id]
+            
+            # 保存
+            self._save_schedule()
+            self._save_completed_posts()
+            
+            logger.info(f"投稿完了: {post_info['article_data']['work_data']['title']}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"投稿完了マーク中にエラー: {e}")
+            logger.error(f"post_result type: {type(post_result)}, content: {post_result}")
+            logger.error(f"post_info type: {type(post_info)}, keys: {list(post_info.keys()) if isinstance(post_info, dict) else 'not dict'}")
+            raise
     
     def mark_post_failed(self, schedule_id: str, error_info: str, retry: bool = True) -> bool:
         """投稿失敗としてマーク"""
