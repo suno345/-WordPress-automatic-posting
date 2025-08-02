@@ -418,6 +418,9 @@ class AutoPostingSystem:
         # 商品IDをスラッグとして使用
         slug = post_data.get('work_id', None)
         
+        # アイキャッチ画像URLを取得
+        featured_image_url = post_data.get('package_image_url', None)
+        
         return self.wp_api.create_post(
             title=post_data['title'],
             content=post_data['content'],
@@ -425,7 +428,8 @@ class AutoPostingSystem:
             tags=tag_ids,
             status='future',
             scheduled_date=post_time,
-            slug=slug
+            slug=slug,
+            featured_image_url=featured_image_url
         )
     
     def _calculate_tomorrow(self) -> datetime:

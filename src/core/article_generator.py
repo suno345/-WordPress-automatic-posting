@@ -156,13 +156,20 @@ class ArticleGenerator:
         return [f'<p>エロ同人サークル「<a href="{circle_tag_url}">{circle_name}</a>」のエロマンガです。</p>']
     
     def _generate_package_image_section(self, work_data: Dict) -> List[str]:
-        """パッケージ画像セクションを生成"""
+        """パッケージ画像セクションを生成（アフィリエイトリンク化アイキャッチ対応）"""
         package_image_url = work_data.get('package_image_url')
+        affiliate_url = work_data.get('affiliate_url', '')
         title = work_data.get('title', '')
         
         if package_image_url:
             proxied_url = self._get_proxied_image_url(package_image_url)
-            return [f'<img src="{proxied_url}" alt="{title}" class="aligncenter size-full" />']
+            
+            # アフィリエイトリンクがある場合はリンク化してアイキャッチとして設定
+            if affiliate_url:
+                return [f'<a href="{affiliate_url}" target="_blank" rel="noopener"><img src="{proxied_url}" alt="{title}" class="aligncenter size-full wp-post-image" /></a>']
+            else:
+                # アフィリエイトリンクがない場合は通常の画像として表示
+                return [f'<img src="{proxied_url}" alt="{title}" class="aligncenter size-full wp-post-image" />']
         
         return []
     
@@ -300,7 +307,8 @@ class ArticleGenerator:
             'content': content,
             'tags': tags,
             'category': category,
-            'work_id': work_data.get('work_id', '')
+            'work_id': work_data.get('work_id', ''),
+            'package_image_url': work_data.get('package_image_url', '')
         }
     
     def _prepare_tags(self, work_data: Dict) -> List[str]:

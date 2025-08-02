@@ -62,7 +62,8 @@ class WordPressAPI(SessionMixin):
         tags: List[int], 
         status: str = 'future', 
         scheduled_date: Optional[datetime] = None,
-        slug: Optional[str] = None
+        slug: Optional[str] = None,
+        featured_image_url: Optional[str] = None
     ) -> Dict[str, Union[bool, int, str]]:
         """
         WordPressに記事を投稿
@@ -75,6 +76,7 @@ class WordPressAPI(SessionMixin):
             status: 投稿ステータス
             scheduled_date: 予約投稿日時
             slug: URLスラッグ（商品IDなど）
+            featured_image_url: アイキャッチ画像URL
         
         Returns:
             投稿結果の辞書 (success, post_id, post_url, error)
@@ -87,6 +89,16 @@ class WordPressAPI(SessionMixin):
             if scheduled_date is None:
                 scheduled_date = datetime.now() + timedelta(days=1)
             
+            # アイキャッチ画像のアップロード
+            featured_media_id = None
+            if featured_image_url:
+                media_result = self.upload_media(featured_image_url, f"featured-{slug or 'image'}.jpg")
+                if media_result and media_result.get('id'):
+                    featured_media_id = media_result['id']
+                    logger.info(f"アイキャッチ画像をアップロード: ID {featured_media_id}")
+                else:
+                    logger.warning(f"アイキャッチ画像のアップロードに失敗: {featured_image_url}")
+            
             post_data = {
                 'title': title,
                 'content': content,
@@ -95,6 +107,10 @@ class WordPressAPI(SessionMixin):
                 'tags': tags,
                 'date': scheduled_date.strftime('%Y-%m-%dT%H:%M:%S'),
             }
+            
+            # アイキャッチ画像IDが取得できた場合は設定
+            if featured_media_id:
+                post_data['featured_media'] = featured_media_id
             
             # スラッグが指定されている場合は追加
             if slug:
