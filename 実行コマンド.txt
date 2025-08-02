@@ -1,27 +1,37 @@
-# VPS 本番記事生成・投稿テストコマンド（PostScheduleManager修正版）
+# VPS 本番記事生成・投稿テストコマンド（効率化版）
 
 # 方法0: VPS更新（必要に応じて実行）
 ./scripts/vps_update.sh
 
-# 方法1: 環境変数設定
-echo "🔧 必要な環境変数を手動設定..."
-export WORDPRESS_PASSWORD='zhC2 MaOT aDBC G2lz oWyT aEuU'
-export DMM_API_ID='gD92abXPQ9hZn9nzDR0v'
-export DMM_AFFILIATE_ID='fanz0077-990'
+# 方法1: 環境変数設定（簡素化版）
+echo "🔧 環境変数設定（.env直接読み込み）..."
 
-# .envファイルからGEMINI_API_KEYを取得
-echo "📥 GEMINI_API_KEY を .env から取得..."
-GEMINI_KEY=$(grep GEMINI_API_KEY .env | cut -d'=' -f2)
-export GEMINI_API_KEY="$GEMINI_KEY"
+# .envファイル全体を読み込み
+if [ -f ".env" ]; then
+    source .env
+    echo "✅ .envファイル読み込み完了"
+else
+    echo "❌ .envファイルが見つかりません"
+    echo "手動設定に切り替えます..."
+    export WORDPRESS_PASSWORD='zhC2 MaOT aDBC G2lz oWyT aEuU'
+    export DMM_API_ID='gD92abXPQ9hZn9nzDR0v'
+    export DMM_AFFILIATE_ID='fanz0077-990'
+    echo "⚠️ GEMINI_API_KEYを手動で設定してください"
+fi
 
-echo "設定完了後の環境変数確認:"
+echo "環境変数確認:"
 echo "WORDPRESS_PASSWORD: $(if [ -n "$WORDPRESS_PASSWORD" ]; then echo "設定済み"; else echo "未設定"; fi)"
-echo "GEMINI_API_KEY: $(if [ -n "$GEMINI_API_KEY" ]; then echo "設定済み"; else echo "未設定"; fi)"
+echo "GEMINI_API_KEY: $(if [ -n "$GEMINI_API_KEY" ]; then echo "設定済み ($(echo $GEMINI_API_KEY | cut -c1-10)...)"; else echo "未設定"; fi)"
 echo "DMM_API_ID: $(if [ -n "$DMM_API_ID" ]; then echo "設定済み"; else echo "未設定"; fi)"
 echo "DMM_AFFILIATE_ID: $(if [ -n "$DMM_AFFILIATE_ID" ]; then echo "設定済み"; else echo "未設定"; fi)"
 echo ""
 
-# 方法2: 実際の作品データで記事生成テスト（PostScheduleManager修正版）
+# 方法1.5: 環境変数チェック（デバッグ用）
+echo "🔍 詳細環境変数確認:"
+env | grep -E "(WORDPRESS|GEMINI|DMM)" || echo "関連環境変数が見つかりません"
+echo ""
+
+# 方法2: 実際の作品データで記事生成テスト（効率化版）
 cat > real_post_test.py << 'EOF'
 import os
 from src.api.dmm_api import DMMAPIClient
@@ -32,12 +42,22 @@ from datetime import datetime, timedelta
 
 print("🎯 本番記事生成テスト開始...")
 
+# 環境変数確認
+required_vars = ['GEMINI_API_KEY']
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+
+if missing_vars:
+    print(f"❌ 必須環境変数が未設定: {missing_vars}")
+    print("💡 'source .env' を実行してから再実行してください")
+    exit(1)
+
 try:
     config = SecureConfigManager()
     dmm_client = DMMAPIClient("gD92abXPQ9hZn9nzDR0v", "fanz0077-990")
     
     # GeminiAPIキーを直接環境変数から取得
     gemini_api_key = os.getenv('GEMINI_API_KEY')
+    print(f"Gemini APIキー確認: {gemini_api_key[:10]}..." if gemini_api_key else "❌ 未設定")
     gemini_api = GeminiAPI(api_key=gemini_api_key)
 
     # ジャンルフィルター有効で作品取得
