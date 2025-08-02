@@ -13,6 +13,7 @@ from ..api.gemini_api import GeminiAPI
 from ..api.wordpress_api import WordPressAPI
 from .article_generator import ArticleGenerator
 from .post_manager import PostManager
+from .search_offset_manager import SearchOffsetManager
 from ..utils.constants import Constants, ErrorMessages
 from ..services.exceptions import AutoPostingError, ConfigurationError
 from ..utils.utils import setup_logging
@@ -52,6 +53,9 @@ class AutoPostingSystem:
             
             # 投稿管理
             self.post_manager = PostManager()
+            
+            # 検索オフセット管理
+            self.offset_manager = SearchOffsetManager()
             
             self.logger.info("システム初期化完了")
             
@@ -126,16 +130,18 @@ class AutoPostingSystem:
             raise AutoPostingError(f"実行中にエラーが発生しました: {e}")
     
     def _fetch_works(self) -> List[Dict]:
-        """作品データを取得（未投稿作品が見つかるまで継続検索）"""
+        """作品データを取得（バッチ処理モード対応）"""
         self.logger.info("DMM API から作品リストを取得中...")
         
         all_unposted_works = []
-        current_offset = 1
+        # 前回の続きから検索開始
+        current_offset = self.offset_manager.get_next_offset()
         batch_size = self.config.system.search_limit
         required_works = self.config.system.max_posts_per_run
         max_search_attempts = Constants.MAX_ADDITIONAL_SEARCHES + 1  # 初回 + 追加検索
         search_attempt = 0
         
+        self.logger.info(f"検索開始位置: {current_offset}件目から")
         self.logger.info(f"目標: {required_works}件の未投稿作品を検索")
         
         # 未投稿作品が必要数に達するまで検索継続
@@ -162,13 +168,12 @@ class AutoPostingSystem:
                 all_unposted_works.extend(unposted_works)
                 self.logger.info(f"✅ {len(unposted_works)}件の未投稿作品を追加（累計: {len(all_unposted_works)}件）")
                 
-                # 1件モード：最初の検索で見つかったら即座に1件だけ返す
-                if required_works == 1 and len(all_unposted_works) >= 1:
-                    result_works = all_unposted_works[:1]
-                    self.logger.info(f"🎯 1件モード: 最初の検索で{len(result_works)}件取得して終了")
-                    return result_works
+                # バッチ処理モード：最初の検索で見つかった全ての作品を処理
+                if search_attempt == 1 and len(all_unposted_works) >= 1:
+                    self.logger.info(f"🎯 バッチ処理モード: 最初の検索で{len(all_unposted_works)}件発見、全件処理を開始")
+                    return all_unposted_works
                 
-                # 複数件モード：必要数に達した場合は必要な分のみ返す
+                # 複数件モード：必要数に達した場合は必要な分のみ返す（従来ロジック）
                 if len(all_unposted_works) >= required_works:
                     result_works = all_unposted_works[:required_works]
                     self.logger.info(f"🎯 目標達成: {len(result_works)}件の未投稿作品を取得")
@@ -215,15 +220,13 @@ class AutoPostingSystem:
         session_posted_count = 0  # このセッションでの投稿件数
         max_posts = self.config.system.max_posts_per_run
         
-        # 処理する作品を制限
-        works_to_process = unposted_works[:max_posts]
-        
-        # 複数作品が見つかった場合は15分刻み前倒し投稿を実行
-        if len(works_to_process) > 1:
-            self.logger.info(f"複数作品発見（{len(works_to_process)}件）- 15分刻み前倒し投稿を実行します")
-            return self._process_works_advance_schedule(works_to_process)
+        # 複数作品が見つかった場合は全件を15分刻み前倒し投稿で処理
+        if len(unposted_works) > 1:
+            self.logger.info(f"複数作品発見（{len(unposted_works)}件）- 15分刻み前倒し投稿を実行します")
+            return self._process_works_advance_schedule(unposted_works)
         else:
-            # 単一作品の場合は従来の処理
+            # 単一作品の場合は従来の処理（MAX_POSTS_PER_RUN制限適用）
+            works_to_process = unposted_works[:max_posts]
             return self._process_works_regular_schedule(works_to_process, total_posted_count)
 
     def _process_works_advance_schedule(self, works: List[Dict]) -> int:
