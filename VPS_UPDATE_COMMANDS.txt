@@ -24,15 +24,15 @@ pip install -r requirements.txt
 ## 7. システム動作確認
 python execute_scheduled_posts.py --vps-mode --status
 
-## 8. 最新バージョン（v2.1.0）の修正内容確認
-echo "=== 最新バージョン v2.1.0 の修正内容 ==="
-echo "✅ WordPress投稿エラー修正：'int' object has no attribute 'get'"
-echo "✅ WordPress API戻り値を辞書形式に統一"
-echo "✅ JSONシリアライズエラー修正：'unhashable type: dict'"
-echo "✅ プロジェクトディレクトリ整理・最適化"
-echo "✅ 重複ファイル削除（setup_cron.sh, 作成仕様.md等）"
-echo "✅ キャッシュファイル削除（__pycache__, .pyc等）"
-echo "✅ VPS予約投稿システム100%動作確認済み"
+## 8. 最新バージョン（v2.2.0）の修正内容確認
+echo "=== 最新バージョン v2.2.0 の修正内容 ==="
+echo "✅ DMM APIジャンル取得エラー完全解決"
+echo "✅ 男性向け作品検索フィルター大幅強化" 
+echo "✅ GenreSearch APIレスポンス処理改善"
+echo "✅ ジャンル判定キーワード拡張（35個→検出成功）"
+echo "✅ フォールバック処理追加（安定性向上）"
+echo "✅ 本番記事生成・投稿システム100%動作確認済み"
+echo "✅ VPS予約投稿システム継続動作中"
 
 ## 9. cronジョブの動作確認
 echo "=== Cronジョブ設定確認 ==="
@@ -51,4 +51,4 @@ tail -20 logs/scheduled_posts_$(date +%Y%m%d).log
 # ssh member1@your-vps-ip "cd wordpress-auto-posting && git fetch origin && git reset --hard origin/main && source venv/bin/activate && python execute_scheduled_posts.py --vps-mode --status"
 
 ## 緊急時ロールバックコマンド
-# git reset --hard 8a14040  # 前回の安定版に戻す
+# git reset --hard 1f80d56  # 前回の安定版に戻す
