@@ -45,32 +45,26 @@ class DMMAPIClient(SessionMixin):
             try:
                 time.sleep(self.request_delay)
                 
-                # 基本パラメータ
+                # 基本パラメータ（コミック作品に特化）
                 params = {
                     'api_id': self.api_id,
                     'affiliate_id': self.affiliate_id,
                     'site': 'FANZA',
                     'service': 'doujin',         # 同人サービス
                     'floor': 'digital_doujin',   # 同人フロア
+                    'article': 'work',           # 作品形式で絞り込み
+                    'article_id': 'comic',       # コミック作品のみ
                     'hits': limit,
                     'offset': offset,
                     'sort': 'date',              # 新着順
                     'output': 'json'
                 }
                 
-                # 改善：男性向けジャンルフィルターを適用
-                if use_genre_filter:
-                    male_genre_ids = self.get_male_genre_ids()
-                    if male_genre_ids:
-                        # 最初の男性向けジャンルIDを使用（複数指定は非対応のため）
-                        params.update({
-                            'article': 'genre',
-                            'article_id': male_genre_ids[0]
-                        })
-                        logger.debug(f"男性向けジャンルフィルター適用: {male_genre_ids[0]}")
+                # 改善：男性向けジャンルフィルターを補助的に適用（キーワードフィルターで代替）
+                # コミック作品指定を優先し、ジャンルは除外キーワードで制御
                 
-                # 改善：女性向けキーワード除外
-                params['keyword'] = '-BL -女性向け -乙女 -TL'
+                # 改善：コミック以外の作品形式と女性向けキーワード除外
+                params['keyword'] = '-BL -女性向け -乙女 -TL -ゲーム -CG集 -音声 -動画 -アニメ -ノベル'
                 
                 # affiliate_idが空の場合は除外
                 if not self.affiliate_id:
@@ -90,7 +84,7 @@ class DMMAPIClient(SessionMixin):
                     return []
                 
                 items = data.get('result', {}).get('items', [])
-                logger.info(f"Retrieved {len(items)} items from DMM API")
+                logger.info(f"Retrieved {len(items)} comic items from DMM API (filtered by article_id=comic)")
                 
                 # デバッグ用：最初のアイテムの構造をログ出力
                 if items:
