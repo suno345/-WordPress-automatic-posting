@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-予約投稿実行スクリプト - 15分間隔実行用
+WordPress予約投稿システム監視スクリプト - WordPress nativeスケジューリング対応
 """
 import sys
 import argparse
@@ -38,14 +38,14 @@ logger = logging.getLogger(__name__)
 def parse_arguments():
     """コマンドライン引数を解析"""
     parser = argparse.ArgumentParser(
-        description='予約投稿実行システム',
+        description='WordPress予約投稿システム監視',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用例:
-  python execute_scheduled_posts.py                # 次の予約投稿を1件実行
-  python execute_scheduled_posts.py --multiple 3   # 最大3件まで連続実行
-  python execute_scheduled_posts.py --status       # 予約投稿状況を表示
+  python execute_scheduled_posts.py                # WordPress予約投稿状況をチェック
+  python execute_scheduled_posts.py --status       # 詳細な予約投稿状況を表示
   python execute_scheduled_posts.py --vps-mode     # VPS最適化モードで実行
+  python execute_scheduled_posts.py --recover-failed # 失敗投稿の回復処理
         """
     )
     
@@ -65,7 +65,7 @@ def parse_arguments():
         '--multiple', '-m',
         type=int,
         default=1,
-        help='連続実行する最大投稿数（デフォルト: 1）'
+        help='WordPress予約投稿状況チェック回数（デフォルト: 1）'
     )
     
     parser.add_argument(
@@ -134,7 +134,7 @@ def main():
             post_manager=post_manager
         )
         
-        logger.info("予約投稿実行システム初期化完了")
+        logger.info("WordPress予約投稿システム監視初期化完了")
         
         # 実行モードに応じた処理
         if args.test_connections:
@@ -156,19 +156,19 @@ def main():
             logger.info(f"回復処理完了: {result['rescheduled_count']}件を再スケジュール")
             
         else:
-            # 予約投稿実行
+            # WordPress予約投稿状況監視
             if args.multiple > 1:
-                # 複数投稿実行
-                logger.info(f"複数予約投稿実行開始 - 最大{args.multiple}件")
+                # 複数回状況チェック
+                logger.info(f"WordPress予約投稿状況チェック開始 - 最大{args.multiple}回")
                 results = executor.execute_multiple_posts(max_posts=args.multiple)
                 print_execution_results(results)
             else:
-                # 単一投稿実行
-                logger.info("次の予約投稿を実行")
+                # 単回状況チェック
+                logger.info("WordPress予約投稿状況をチェック")
                 result = executor.execute_next_scheduled_post()
                 print_single_execution_result(result)
         
-        logger.info("予約投稿実行システム終了")
+        logger.info("WordPress予約投稿システム監視終了")
         
     except ConfigurationError as e:
         logger.error(f"設定エラー: {e}")
@@ -185,9 +185,9 @@ def main():
 
 
 def print_status(status):
-    """予約投稿状況を表示"""
+    """WordPress予約投稿状況を表示"""
     print("\n" + "="*50)
-    print("🕒 予約投稿システム状況")
+    print("🕒 WordPress予約投稿システム状況")
     print("="*50)
     
     schedule_summary = status["schedule_summary"]
@@ -213,9 +213,9 @@ def print_status(status):
 
 
 def print_execution_results(results):
-    """複数投稿実行結果を表示"""
+    """WordPress予約投稿監視結果を表示"""
     print("\n" + "="*50)
-    print("📊 複数投稿実行結果")
+    print("📊 WordPress予約投稿監視結果")
     print("="*50)
     
     print(f"実行開始: {results['started_at']}")
@@ -232,16 +232,19 @@ def print_execution_results(results):
 
 
 def print_single_execution_result(result):
-    """単一投稿実行結果を表示"""
+    """WordPress予約投稿状況結果を表示"""
     print("\n" + "="*50)
-    print("📊 投稿実行結果")
+    print("📊 WordPress予約投稿状況")
     print("="*50)
     
     status_emoji = {
         'success': '✅',
         'failed': '❌',
         'exception': '⚠️',
-        'no_action': '📭'
+        'no_action': '📭',
+        'wordpress_managed': '🔄',
+        'no_scheduled_posts': '📋',
+        'error': '⚠️'
     }.get(result['status'], '❓')
     
     print(f"ステータス: {status_emoji} {result['status']}")

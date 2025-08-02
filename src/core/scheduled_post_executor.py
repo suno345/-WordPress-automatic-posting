@@ -225,184 +225,91 @@ class ScheduledPostExecutor:
                 "execution_time": 0
             }
     
-    def _generate_article_title(self, work_data: Dict) -> str:
-        """記事タイトルを生成"""
-        work_title = work_data.get('title', '')
-        
-        # 作者・サークル名を取得
-        creators = []
-        if work_data.get('circle_name') and work_data['circle_name'] != '不明':
-            creators.append(work_data['circle_name'])
-        if work_data.get('author_name') and work_data['author_name'] != '不明':
-            creators.append(work_data['author_name'])
-        
-        creator_name = '・'.join(list(dict.fromkeys(creators))) if creators else '不明'
-        
-        return f"{work_title}【{creator_name}】"
+    # Note: 記事タイトル生成、カテゴリ、タグ処理はPostScheduleManagerに移動済み
     
-    def _get_categories(self, work_data: Dict) -> List[str]:
-        """カテゴリを取得"""
-        categories = ["同人"]  # デフォルトカテゴリ
-        
-        # ジャンル情報からカテゴリを追加
-        if work_data.get('genre'):
-            categories.append(work_data['genre'])
-        
-        return categories
-    
-    def _get_tags(self, work_data: Dict) -> List[str]:
-        """タグを取得"""
-        tags = []
-        
-        # 作者・サークル名をタグに追加
-        if work_data.get('circle_name') and work_data['circle_name'] != '不明':
-            tags.append(work_data['circle_name'])
-        if work_data.get('author_name') and work_data['author_name'] != '不明':
-            tags.append(work_data['author_name'])
-        
-        # その他の情報をタグに追加
-        if work_data.get('series_name'):
-            tags.append(work_data['series_name'])
-        
-        return tags[:10]  # 最大10個のタグ
-    
-    def _convert_categories_to_ids(self, category_names: List[str]) -> List[int]:
-        """カテゴリ名をIDに変換"""
-        category_ids = []
-        for name in category_names:
-            try:
-                # WordPress APIを使用してカテゴリIDを取得または作成
-                category_id = self.wp_api.get_or_create_category(name)
-                if category_id:
-                    category_ids.append(category_id)
-            except Exception as e:
-                logger.warning(f"カテゴリ '{name}' のID変換でエラー: {e}")
-                
-        # デフォルトカテゴリ（未分類: ID=1）がない場合は追加
-        if not category_ids:
-            category_ids.append(1)
-            
-        return category_ids
-    
-    def _convert_tags_to_ids(self, tag_names: List[str]) -> List[int]:
-        """タグ名をIDに変換"""
-        tag_ids = []
-        for name in tag_names:
-            try:
-                # WordPress APIを使用してタグIDを取得または作成
-                tag_id = self.wp_api.get_or_create_tag(name)
-                if tag_id:
-                    tag_ids.append(tag_id)
-            except Exception as e:
-                logger.warning(f"タグ '{name}' のID変換でエラー: {e}")
-                
-        return tag_ids
-    
-    def execute_multiple_posts(self, max_posts: int = 5) -> Dict:
+    def create_wordpress_schedule_from_articles(self, articles: List[Dict]) -> Dict:
         """
-        複数の予約投稿を連続実行(遅延分の回復用)
+        記事データからWordPress予約投稿を一括作成
         
         Args:
-            max_posts: 最大実行数
+            articles: 記事データのリスト
             
         Returns:
-            実行結果サマリー
+            作成結果
         """
-        logger.info(f"複数投稿実行開始 - 最大: {max_posts}件")
-        
-        results = {
-            "executed_posts": [],
-            "success_count": 0,
-            "failed_count": 0,
-            "total_execution_time": 0,
-            "started_at": datetime.now().isoformat()
-        }
-        
-        start_time = datetime.now()
-        
-        for i in range(max_posts):
-            # 実行時間制限チェック
-            if (datetime.now() - start_time).total_seconds() > self.max_execution_time:
-                logger.warning(f"実行時間制限に達したため中断 (実行済み: {i}件)")
-                break
+        try:
+            logger.info(f"WordPress予約投稿一括作成開始: {len(articles)}件")
             
-            # 次の投稿を実行
-            post_result = self.execute_next_scheduled_post()
-            results["executed_posts"].append(post_result)
+            # PostScheduleManagerを使用して予約投稿を作成
+            schedule_result = self.schedule_manager.create_advance_schedule(articles)
             
-            if post_result["status"] == "success":
-                results["success_count"] += 1
-            elif post_result["status"] in ["failed", "exception"]:
-                results["failed_count"] += 1
-            elif post_result["status"] == "no_action":
-                # 実行する投稿がない場合は終了
-                break
-            
-            # インターバル（次の投稿まで少し待機）
-            if i < max_posts - 1:
-                time.sleep(2)
-        
-        results["total_execution_time"] = (datetime.now() - start_time).total_seconds()
-        results["completed_at"] = datetime.now().isoformat()
-        
-        logger.info(f"複数投稿実行完了: 成功{results['success_count']}件, "
-                   f"失敗{results['failed_count']}件 (総時間: {results['total_execution_time']:.1f}秒)")
-        
-        return results
-    
-    def get_execution_status(self) -> Dict:
-        """実行システムの状況を取得"""
-        schedule_status = self.schedule_manager.get_schedule_status()
-        
-        # 次の投稿予定時刻を計算
-        next_post = self.schedule_manager.get_next_scheduled_post()
-        next_post_info = None
-        
-        if next_post:
-            post_time = datetime.fromisoformat(next_post["post_time"])
-            delay_minutes = max(0, (post_time - datetime.now()).total_seconds() / 60)
-            
-            next_post_info = {
-                "title": next_post["article_data"]["work_data"]["title"],
-                "scheduled_time": post_time.strftime("%Y-%m-%d %H:%M"),
-                "delay_minutes": round(delay_minutes, 1),
-                "is_overdue": delay_minutes <= 0,
-                "priority": next_post.get("priority", "normal")
+            result = {
+                "success": True,
+                "total_articles": len(articles),
+                "created_posts": len(schedule_result.get("wordpress_post_ids", [])),
+                "schedule_type": schedule_result.get("type", "unknown"),
+                "wordpress_post_ids": schedule_result.get("wordpress_post_ids", []),
+                "slots_used": schedule_result.get("slots_used", []),
+                "created_at": datetime.now().isoformat()
             }
-        
-        return {
-            "system_ready": True,
-            "schedule_summary": schedule_status,
-            "next_post": next_post_info,
-            "performance_metrics": self._get_performance_metrics(),
-            "last_updated": datetime.now().isoformat()
-        }
+            
+            logger.info(f"WordPress予約投稿一括作成完了: {result['created_posts']}件作成")
+            
+            return result
+            
+        except Exception as e:
+            error_message = f"WordPress予約投稿一括作成エラー: {e}"
+            logger.error(error_message)
+            
+            return {
+                "success": False,
+                "error": error_message,
+                "total_articles": len(articles),
+                "created_posts": 0,
+                "created_at": datetime.now().isoformat()
+            }
     
-    def _get_performance_metrics(self) -> Dict:
-        """パフォーマンスメトリクスを取得"""
-        # 実際の実装では、過去の実行ログから統計を計算
-        return {
-            "avg_execution_time": 45.0,  # 平均実行時間（秒）
-            "success_rate_24h": 98.5,    # 過去24時間の成功率
-            "posts_completed_today": 0,   # 今日完了した投稿数
-            "posts_failed_today": 0,     # 今日失敗した投稿数
-        }
-    
-    def recover_failed_posts(self) -> Dict:
-        """失敗した投稿の回復処理"""
-        logger.info("失敗投稿の回復処理開始")
+    def get_wordpress_schedule_summary(self) -> Dict:
+        """
+        WordPress予約投稿のサマリーを取得
         
-        # 失敗投稿の再スケジュール
-        rescheduled_count = self.schedule_manager.reschedule_failed_posts()
-        
-        result = {
-            "rescheduled_count": rescheduled_count,
-            "recovery_time": datetime.now().isoformat()
-        }
-        
-        if rescheduled_count > 0:
-            logger.info(f"失敗投稿回復完了: {rescheduled_count}件を再スケジュール")
-        else:
-            logger.info("回復対象の失敗投稿はありません")
-        
-        return result
+        Returns:
+            サマリー情報
+        """
+        try:
+            scheduled_posts = self.schedule_manager.get_wordpress_scheduled_posts()
+            activity_summary = self.schedule_manager.get_activity_summary(days=7)
+            
+            # 24時間以内の予約投稿をカウント
+            now = datetime.now()
+            next_24h_posts = 0
+            
+            for post in scheduled_posts:
+                try:
+                    post_time = datetime.fromisoformat(post['scheduled_time'].replace('T', ' ').replace('Z', ''))
+                    if post_time <= now + timedelta(hours=24):
+                        next_24h_posts += 1
+                except Exception:
+                    continue
+            
+            return {
+                "total_scheduled_posts": len(scheduled_posts),
+                "next_24h_posts": next_24h_posts,
+                "activity_summary": activity_summary,
+                "wordpress_posts": scheduled_posts[:5],  # 最初の5件
+                "system_type": "wordpress_native",
+                "last_updated": now.isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"WordPressスケジュールサマリー取得エラー: {e}")
+            
+            return {
+                "total_scheduled_posts": 0,
+                "next_24h_posts": 0,
+                "activity_summary": {"total_activities": 0, "activity_breakdown": {}},
+                "wordpress_posts": [],
+                "system_type": "wordpress_native",
+                "error": str(e),
+                "last_updated": datetime.now().isoformat()
+            }

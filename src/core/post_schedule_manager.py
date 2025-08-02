@@ -579,6 +579,29 @@ class PostScheduleManager:
         
         return rescheduled_count
     
+    def get_activity_summary(self, days: int = 7) -> Dict:
+        """\u30a2\u30af\u30c6\u30a3\u30d3\u30c6\u30a3\u30b5\u30de\u30ea\u30fc\u3092\u53d6\u5f97"""
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        recent_activities = [
+            activity for activity in self.activity_log
+            if datetime.fromisoformat(activity["timestamp"]) >= cutoff_date
+        ]
+        
+        # \u30a2\u30af\u30c6\u30a3\u30d3\u30c6\u30a3\u30bf\u30a4\u30d7\u5225\u96c6\u8a08
+        activity_counts = {}
+        for activity in recent_activities:
+            activity_type = activity["type"]
+            activity_counts[activity_type] = activity_counts.get(activity_type, 0) + 1
+        
+        return {
+            "period_days": days,
+            "total_activities": len(recent_activities),
+            "activity_breakdown": activity_counts,
+            "recent_activities": recent_activities[-10:],  # \u6700\u65b010\u4ef6
+            "generated_at": datetime.now().isoformat()
+        }
+    
     def _find_next_available_slot(self) -> Optional[datetime]:
         """次の利用可能な時間枠を検索"""
         now = datetime.now()
