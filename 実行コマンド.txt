@@ -20,6 +20,11 @@ echo "⚙️ 環境設定確認..."
 # 重要な設定値を確認
 cat .env | grep -E "MAX_POSTS_PER_RUN|POST_INTERVAL|SEARCH_LIMIT"
 
+# VPS用に1件モード設定（最初の検索で見つかったら追加検索せずに1件だけ処理）
+echo "1件モード設定:"
+echo "MAX_POSTS_PER_RUN=1" >> .env || echo "MAX_POSTS_PER_RUN=1" | tee -a .env
+cat .env | grep MAX_POSTS_PER_RUN
+
 # ディレクトリ構造確認
 ls -la data/
 ls -la logs/
@@ -160,15 +165,15 @@ echo "crontab -r"
 ## 10. 実行結果サマリー
 echo ""
 echo "📋 VPSシステム情報サマリー:"
-echo "バージョン: v3.0.0（前倒し投稿システム対応版）"
+echo "バージョン: v3.1.0（1件モード・アイキャッチ対応版）"
 echo "主要機能:"
-echo "- MAX_POSTS_PER_RUN=100対応"
-echo "- 15分刻み前倒し投稿"
-echo "- ArticleGeneratorメソッド名修正済み"
+echo "- 1件モード: MAX_POSTS_PER_RUN=1で最初の検索で見つかったら即座に1件処理"
+echo "- 100件モード: MAX_POSTS_PER_RUN=100で15分刻み前倒し投稿"
+echo "- WordPressアイキャッチ画像自動設定"
 echo "- 継続検索ロジック（1-100, 101-200, ...）"
 echo ""
-echo "⚠️ 注意事項:"
-echo "- 100件処理は大量のメモリと時間を消費"
-echo "- 本番実行前に必ず1件テストを実行"
-echo "- 長時間処理中はtimeoutコマンドで制限推奨"
+echo "⚠️ 運用推奨設定:"
+echo "- VPS通常運用: MAX_POSTS_PER_RUN=1（1件ずつ確実に処理）"
+echo "- 大量投稿時: MAX_POSTS_PER_RUN=100（大量のメモリと時間を消費）"
+echo "- アイキャッチ画像が自動的にWordPressに設定される"
 echo ""

@@ -162,7 +162,13 @@ class AutoPostingSystem:
                 all_unposted_works.extend(unposted_works)
                 self.logger.info(f"✅ {len(unposted_works)}件の未投稿作品を追加（累計: {len(all_unposted_works)}件）")
                 
-                # 必要数に達した場合は必要な分のみ返す
+                # 1件モード：最初の検索で見つかったら即座に1件だけ返す
+                if required_works == 1 and len(all_unposted_works) >= 1:
+                    result_works = all_unposted_works[:1]
+                    self.logger.info(f"🎯 1件モード: 最初の検索で{len(result_works)}件取得して終了")
+                    return result_works
+                
+                # 複数件モード：必要数に達した場合は必要な分のみ返す
                 if len(all_unposted_works) >= required_works:
                     result_works = all_unposted_works[:required_works]
                     self.logger.info(f"🎯 目標達成: {len(result_works)}件の未投稿作品を取得")
