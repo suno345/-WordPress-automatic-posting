@@ -72,8 +72,9 @@ class SimpleConfigManager:
         self._config_data['system'] = {
             'log_level': os.getenv('LOG_LEVEL', 'INFO'),
             'max_posts_per_run': int(os.getenv('MAX_POSTS_PER_RUN', '1')),
-            'search_limit': int(os.getenv('SEARCH_LIMIT', '200')),
+            'search_limit': int(os.getenv('SEARCH_LIMIT', '100')),  # DMM API制限に合わせて100に修正
             'request_delay': float(os.getenv('REQUEST_DELAY', '3.0')),
+            'post_interval': float(os.getenv('POST_INTERVAL', '900.0')),  # 15分間隔（秒）
             'vps_mode': os.getenv('VPS_MODE', 'false').lower() == 'true'
         }
         
@@ -147,6 +148,7 @@ class SimpleConfigManager:
             max_posts_per_run=self.get('system', 'max_posts_per_run'),
             search_limit=self.get('system', 'search_limit'),
             request_delay=self.get('system', 'request_delay'),
+            post_interval=self.get('system', 'post_interval'),
             vps_mode=self.get('system', 'vps_mode')
         )
 
@@ -175,9 +177,10 @@ class GeminiConfig:
 class SystemConfig:
     """システム設定クラス"""
     def __init__(self, log_level: str, max_posts_per_run: int, search_limit: int, 
-                 request_delay: float, vps_mode: bool):
+                 request_delay: float, post_interval: float, vps_mode: bool):
         self.log_level = log_level
         self.max_posts_per_run = max_posts_per_run
         self.search_limit = search_limit
         self.request_delay = request_delay
+        self.post_interval = post_interval
         self.vps_mode = vps_mode

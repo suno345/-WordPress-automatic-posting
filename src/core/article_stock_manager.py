@@ -101,10 +101,10 @@ class ArticleStockManager:
             # 幅広い範囲から作品を取得（ストック用は過去作品も含める）
             search_ranges = [
                 {"offset": 1, "limit": 100},      # 最新作品
-                {"offset": 101, "limit": 200},    # 準新作品
-                {"offset": 301, "limit": 300},    # 中堅作品
-                {"offset": 601, "limit": 500},    # 過去作品
-                {"offset": 1101, "limit": 1000}, # 更に過去の作品
+                {"offset": 101, "limit": 100},    # 準新作品
+                {"offset": 201, "limit": 100},    # 中堅作品
+                {"offset": 301, "limit": 100},    # 過去作品
+                {"offset": 401, "limit": 100},    # 更に過去の作品
             ]
             
             all_works = []

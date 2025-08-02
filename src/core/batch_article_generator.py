@@ -142,16 +142,16 @@ class BatchArticleGenerator:
         
         if 2 <= current_hour <= 6:  # 深夜バッチ時間
             search_strategies = [
-                {"offset": 1, "limit": 400, "desc": "最新400件"},
-                {"offset": 401, "limit": 600, "desc": "準新作600件"},
-                {"offset": 1001, "limit": 800, "desc": "中堅800件"},
-                {"offset": 1801, "limit": 1200, "desc": "過去1200件"},
+                {"offset": 1, "limit": 100, "desc": "最新100件"},
+                {"offset": 101, "limit": 100, "desc": "準新作100件"},
+                {"offset": 201, "limit": 100, "desc": "中堅100件"},
+                {"offset": 301, "limit": 100, "desc": "過去100件"},
             ]
         else:  # 緊急時間
             search_strategies = [
-                {"offset": 1, "limit": 200, "desc": "最新200件"},
-                {"offset": 201, "limit": 300, "desc": "準新作300件"},
-                {"offset": 501, "limit": 500, "desc": "中堅500件"},
+                {"offset": 1, "limit": 100, "desc": "最新100件"},
+                {"offset": 101, "limit": 100, "desc": "準新作100件"},
+                {"offset": 201, "limit": 100, "desc": "中堅100件"},
             ]
         
         all_works = []
@@ -369,8 +369,9 @@ class BatchArticleGenerator:
         logger.warning(f"緊急記事生成開始: {count}件")
         
         try:
-            # 最新作品から迅速に取得
-            api_items = self.dmm_client.get_items(limit=count * 2, offset=1)
+            # 最新作品から迅速に取得（DMM API制限100件まで）
+            api_limit = min(count * 2, 100)  # DMM APIの制限（100件）を遵守
+            api_items = self.dmm_client.get_items(limit=api_limit, offset=1)
             
             works = []
             for item in api_items:
