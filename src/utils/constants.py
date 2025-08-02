@@ -15,9 +15,9 @@ class Constants:
     
     # 投稿関連  
     MAX_POSTS_PER_RUN: Final[int] = 1
-    SEARCH_LIMIT: Final[int] = 50  # 1回の検索件数を削減（メモリ負荷軽減）
-    MAX_ADDITIONAL_SEARCHES: Final[int] = 5  # レビューあり作品発見のため追加検索増加
-    ADDITIONAL_SEARCH_BATCH_SIZE: Final[int] = 30  # 追加検索バッチサイズを削減
+    SEARCH_LIMIT: Final[int] = 100  # 1回の検索件数（API制限に合わせて100）
+    MAX_ADDITIONAL_SEARCHES: Final[int] = 24  # 低レビュー率期間対応：最大2,500件検索可能（100×25回）
+    ADDITIONAL_SEARCH_BATCH_SIZE: Final[int] = 100  # 追加検索も100件で統一
     POST_INTERVAL_MINUTES: Final[int] = 15
     DEFAULT_TARGET_LENGTH: Final[int] = 180
     
