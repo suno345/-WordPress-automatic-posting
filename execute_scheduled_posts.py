@@ -158,7 +158,7 @@ def main():
             
         elif args.status:
             # 状況表示
-            status = executor.get_execution_status()
+            status = executor.get_wordpress_schedule_summary()
             print_status(status)
             
         elif args.recover_failed:

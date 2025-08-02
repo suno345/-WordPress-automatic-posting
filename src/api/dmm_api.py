@@ -441,8 +441,15 @@ class DMMAPIClient(SessionMixin):
                     return False
             else:
                 # review情報がAPIレスポンスにない場合
-                logger.info(f"No review data in API response: {api_item.get('title', 'Unknown')}")
-                return False
+                # VPSモード時は作品不足を防ぐためレビューなしでも許可
+                import os
+                vps_mode = os.getenv('VPS_MODE', 'false').lower() == 'true'
+                if vps_mode:
+                    logger.info(f"VPSモード: レビューなしでも許可 - {api_item.get('title', 'Unknown')}")
+                    return True
+                else:
+                    logger.info(f"No review data in API response: {api_item.get('title', 'Unknown')}")
+                    return False
             
         except Exception as e:
             logger.error(f"Error validating reviews for {api_item.get('title', 'Unknown')}: {e}")
