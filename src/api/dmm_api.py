@@ -60,11 +60,18 @@ class DMMAPIClient(SessionMixin):
                     'output': 'json'
                 }
                 
-                # 改善：男性向けジャンルフィルターを補助的に適用（キーワードフィルターで代替）
-                # コミック作品指定を優先し、ジャンルは除外キーワードで制御
-                
-                # 改善：コミック以外の作品形式と女性向けキーワード除外
-                params['keyword'] = '-BL -女性向け -乙女 -TL -ゲーム -CG集 -音声 -動画 -アニメ -ノベル'
+                # 改善：GenreSearch APIで男性向けジャンルを特定して使用
+                if use_genre_filter:
+                    # 男性向けコミック作品に特化：ジャンル指定でフィルタ
+                    male_genre_ids = self.get_male_genre_ids()
+                    if male_genre_ids:
+                        # articleをgenreに変更して男性向けジャンルで絞り込み
+                        params['article'] = 'genre'
+                        params['article_id'] = male_genre_ids[0]  # 最初の男性向けジャンルIDを使用
+                        logger.debug(f"男性向けジャンルフィルター適用: {male_genre_ids[0]}")
+                    else:
+                        # ジャンルIDが取得できない場合はコミック指定を維持
+                        logger.info("男性向けジャンルIDが取得できないため、コミック指定を使用")
                 
                 # affiliate_idが空の場合は除外
                 if not self.affiliate_id:
@@ -84,7 +91,10 @@ class DMMAPIClient(SessionMixin):
                     return []
                 
                 items = data.get('result', {}).get('items', [])
-                logger.info(f"Retrieved {len(items)} comic items from DMM API (filtered by article_id=comic)")
+                if 'article' in params and params['article'] == 'genre':
+                    logger.info(f"Retrieved {len(items)} items from DMM API (filtered by male genre: {params.get('article_id', 'unknown')})")
+                else:
+                    logger.info(f"Retrieved {len(items)} comic items from DMM API (filtered by article_id=comic)")
                 
                 # デバッグ用：最初のアイテムの構造をログ出力
                 if items:
@@ -119,24 +129,22 @@ class DMMAPIClient(SessionMixin):
             return []
     
     def is_comic_work(self, api_item: Dict) -> bool:
-        """男性向けコミック作品のみを判定（男性向けコミック以外は全て除外）"""
-        # imageURLのパスでコミック作品を厳密に判定
+        """コミック作品のみを判定（ジャンルフィルター使用時も対応）"""
+        # imageURLのパスでコミック作品を判定
         if 'imageURL' in api_item and 'large' in api_item['imageURL']:
             image_url = api_item['imageURL']['large']
             
-            # コミック作品のみを許可
+            # コミック作品を識別
             if '/digital/comic/' in image_url:
-                # 男性向け作品かどうかをチェック
-                return self._is_male_oriented_work(api_item)
+                return True
             
-            # コミック以外は全て除外
+            # 明確に非コミック系のパスは除外
             excluded_paths = [
                 '/digital/game/',      # ゲーム作品
                 '/digital/cg/',        # CG集
                 '/digital/voice/',     # 音声作品
                 '/digital/video/',     # 動画作品
-                '/digital/doujin/',    # その他同人作品
-                '/digital/anime/',     # アニメ作品
+                '/digital/anime/',     # アニメ作品（動画）
                 '/digital/novel/',     # ノベル作品
             ]
             
@@ -144,12 +152,16 @@ class DMMAPIClient(SessionMixin):
                 if excluded_path in image_url:
                     return False
         
-        # ジャンルで補助判定
+        # ジャンルでコミック作品を判定（GenreSearch使用時の補助判定）
         if 'iteminfo' in api_item and 'genre' in api_item['iteminfo']:
             for genre in api_item['iteminfo']['genre']:
                 genre_name = genre.get('name', '')
                 
-                # 非コミック系ジャンルは明確に除外
+                # コミック系ジャンルを確認
+                if any(comic_genre in genre_name for comic_genre in ['コミック', 'マンガ', '漫画']):
+                    return True
+                
+                # 明確に非コミック系ジャンルは除外
                 excluded_genres = [
                     'ロールプレイング', 'RPG', 'シミュレーション', 'アクション',
                     '動画・アニメーション', 'ボイス', '音声付き', 'ASMR',
@@ -158,56 +170,24 @@ class DMMAPIClient(SessionMixin):
                 
                 if any(excluded in genre_name for excluded in excluded_genres):
                     return False
-                
-                # コミック系ジャンルのみ許可
-                if any(comic_genre in genre_name for comic_genre in ['コミック', 'マンガ', '漫画']):
-                    return True
         
-        # 明確にコミック作品と判定できない場合は除外（厳格モード）
-        return False
+        # GenreSearch APIで男性向けジャンルを使用している場合、
+        # コミック系の可能性が高いため、より寛容な判定
+        return True
     
     def _is_male_oriented_work(self, api_item: Dict) -> bool:
-        """男性向け作品かどうかを判定"""
-        # ジャンルから男性向け・女性向けを判定
-        if 'iteminfo' in api_item and 'genre' in api_item['iteminfo']:
-            for genre in api_item['iteminfo']['genre']:
-                genre_name = genre.get('name', '')
-                
-                # 女性向けジャンルは除外
-                female_oriented_genres = [
-                    '女性向け', 'BL', 'ボーイズラブ', '乙女',
-                    'TL', 'ティーンズラブ', '少女マンガ',
-                    '恋愛', 'ラブロマンス', '少女向け'
-                ]
-                
-                if any(female_genre in genre_name for female_genre in female_oriented_genres):
-                    logger.debug(f"女性向け作品として除外: {genre_name}")
-                    return False
-                
-                # 男性向けジャンルを確認
-                male_oriented_genres = [
-                    '男性向け', '成人向け', 'アダルト', 'エロ',
-                    '青年向け', '大人向け', 'R18', '18禁'
-                ]
-                
-                if any(male_genre in genre_name for male_genre in male_oriented_genres):
-                    logger.debug(f"男性向け作品として許可: {genre_name}")
-                    return True
+        """男性向け作品かどうかを判定（GenreSearch使用時は簡素化）"""
+        # GenreSearch APIで既に男性向けジャンルでフィルタしている場合は、
+        # 明らかな女性向けキーワードのチェックのみ実行
         
-        # カテゴリーからも判定
-        category_name = api_item.get('category_name', '')
-        if '女性向け' in category_name or 'BL' in category_name:
-            logger.debug(f"女性向けカテゴリーとして除外: {category_name}")
-            return False
-        
-        # タイトルからも簡易判定（最終手段）
+        # タイトルから女性向けキーワードをチェック
         title = api_item.get('title', '')
         female_keywords = ['BL', 'ボーイズラブ', '乙女', '女性向け', 'TL']
         if any(keyword in title for keyword in female_keywords):
             logger.debug(f"女性向けキーワードを含むタイトルとして除外: {title}")
             return False
         
-        # デフォルトは男性向けとして扱う（同人コミックの大部分が男性向けのため）
+        # GenreSearch APIによる男性向けフィルタを信頼
         return True
     
     def initialize_genre_cache(self) -> bool:
