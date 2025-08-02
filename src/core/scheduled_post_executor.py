@@ -166,8 +166,12 @@ class ScheduledPostExecutor:
             article_title = self._generate_article_title(work_data)
             
             # カテゴリとタグの設定
-            categories = self._get_categories(work_data)
-            tags = self._get_tags(work_data)
+            category_names = self._get_categories(work_data)
+            tag_names = self._get_tags(work_data)
+            
+            # 名前をIDに変換
+            categories = self._convert_categories_to_ids(category_names)
+            tags = self._convert_tags_to_ids(tag_names)
             
             # WordPress投稿実行
             post_result = self.wp_api.create_post(
@@ -248,6 +252,38 @@ class ScheduledPostExecutor:
             tags.append(work_data['series_name'])
         
         return tags[:10]  # 最大10個のタグ
+    
+    def _convert_categories_to_ids(self, category_names: List[str]) -> List[int]:
+        """カテゴリ名をIDに変換"""
+        category_ids = []
+        for name in category_names:
+            try:
+                # WordPress APIを使用してカテゴリIDを取得または作成
+                category_id = self.wp_api.get_or_create_category(name)
+                if category_id:
+                    category_ids.append(category_id)
+            except Exception as e:
+                logger.warning(f"カテゴリ '{name}' のID変換でエラー: {e}")
+                
+        # デフォルトカテゴリ（未分類: ID=1）がない場合は追加
+        if not category_ids:
+            category_ids.append(1)
+            
+        return category_ids
+    
+    def _convert_tags_to_ids(self, tag_names: List[str]) -> List[int]:
+        """タグ名をIDに変換"""
+        tag_ids = []
+        for name in tag_names:
+            try:
+                # WordPress APIを使用してタグIDを取得または作成
+                tag_id = self.wp_api.get_or_create_tag(name)
+                if tag_id:
+                    tag_ids.append(tag_id)
+            except Exception as e:
+                logger.warning(f"タグ '{name}' のID変換でエラー: {e}")
+                
+        return tag_ids
     
     def execute_multiple_posts(self, max_posts: int = 5) -> Dict:
         """
