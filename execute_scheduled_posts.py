@@ -86,6 +86,12 @@ def parse_arguments():
         help='失敗した投稿を回復処理'
     )
     
+    parser.add_argument(
+        '--test-connections',
+        action='store_true',
+        help='API接続テストを実行'
+    )
+    
     return parser.parse_args()
 
 
@@ -108,29 +114,36 @@ def main():
         
         # 設定の読み込み
         config_manager = SecureConfigManager(config_file)
-        wp_config = config_manager.get_wordpress_config()
+        wp_config = config_manager.wordpress
         
         # WordPress APIクライアントの初期化
         wp_api = WordPressAPI(
-            url=wp_config['url'],
-            username=wp_config['username'],
-            password=wp_config['password']
+            url=wp_config.url,
+            username=wp_config.username,
+            password=wp_config.password
         )
         
         # 投稿管理システムの初期化
-        post_manager = PostManager(config_manager.config)
+        post_manager = PostManager(config_manager)
         
         # 予約投稿実行システムの初期化
         executor = ScheduledPostExecutor(
             wp_api=wp_api,
-            config=config_manager.config,
+            config=config_manager,
             post_manager=post_manager
         )
         
         logger.info("予約投稿実行システム初期化完了")
         
         # 実行モードに応じた処理
-        if args.status:
+        if args.test_connections:
+            # API接続テスト
+            logger.info("API接続テストを開始")
+            test_wordpress_connection(wp_api)
+            test_config_access(config_manager)
+            logger.info("全ての接続テストが完了しました")
+            
+        elif args.status:
             # 状況表示
             status = executor.get_execution_status()
             print_status(status)
@@ -247,6 +260,59 @@ def print_single_execution_result(result):
         print(f"  総実行時間: {perf.get('total_execution_time', 0):.1f}秒")
         if 'wordpress_post_time' in perf:
             print(f"  WordPress投稿時間: {perf['wordpress_post_time']:.1f}秒")
+
+
+def test_wordpress_connection(wp_api):
+    """WordPress API接続テスト"""
+    print("\n🔗 WordPress API接続テスト")
+    print("-" * 30)
+    
+    try:
+        # WordPress API接続テスト
+        result = wp_api.test_connection()
+        if result.get('success'):
+            print("✅ WordPress API接続成功")
+            print(f"   サイトURL: {result.get('site_url', 'N/A')}")
+            print(f"   サイト名: {result.get('site_name', 'N/A')}")
+        else:
+            print("❌ WordPress API接続失敗")
+            print(f"   エラー: {result.get('error', '不明なエラー')}")
+    except Exception as e:
+        print(f"❌ WordPress API接続エラー: {e}")
+
+
+def test_config_access(config_manager):
+    """設定アクセステスト"""
+    print("\n⚙️ 設定アクセステスト")
+    print("-" * 30)
+    
+    try:
+        # WordPress設定テスト
+        wp_config = config_manager.wordpress
+        print("✅ WordPress設定読み込み成功")
+        print(f"   URL: {wp_config.url}")
+        print(f"   ユーザー名: {wp_config.username}")
+        print(f"   パスワード: {'*' * 8}")
+        
+        # DMM API設定テスト
+        dmm_config = config_manager.dmm_api
+        print("✅ DMM API設定読み込み成功")
+        print(f"   API ID: {dmm_config.api_id[:8]}...")
+        print(f"   アフィリエイトID: {dmm_config.affiliate_id}")
+        
+        # Gemini API設定テスト
+        gemini_config = config_manager.gemini
+        print("✅ Gemini API設定読み込み成功")
+        print(f"   API Key: {gemini_config.api_key[:8]}...")
+        
+        # システム設定テスト
+        system_config = config_manager.system
+        print("✅ システム設定読み込み成功")
+        print(f"   VPSモード: {system_config.vps_mode}")
+        print(f"   検索制限: {system_config.search_limit}")
+        
+    except Exception as e:
+        print(f"❌ 設定アクセスエラー: {e}")
 
 
 if __name__ == "__main__":
