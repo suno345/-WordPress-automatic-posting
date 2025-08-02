@@ -1,133 +1,122 @@
 #!/bin/bash
+# VPS環境セットアップスクリプト - Git連携版
+# 使用方法: chmod +x scripts/vps_setup.sh && ./scripts/vps_setup.sh
 
-# VPS初期セットアップスクリプト
-# システム全体の初期化とディレクトリ作成
+set -e  # エラー時に停止
 
-# 設定
-PROJECT_ROOT="${BLOG_AUTOMATION_ROOT:-/opt/blog-automation}"
-PYTHON_PATH="${PYTHON_PATH:-/usr/bin/env python3}"
+# 色付きエコー関数
+print_status() {
+    echo -e "\033[1;32m✅ $1\033[0m"
+}
 
-echo "=== VPS自動投稿システム初期セットアップ ==="
-echo "プロジェクトルート: $PROJECT_ROOT"
+print_error() {
+    echo -e "\033[1;31m❌ $1\033[0m"
+}
+
+print_info() {
+    echo -e "\033[1;34mℹ️  $1\033[0m"
+}
+
+# プロジェクトルートを現在のディレクトリに設定
+PROJECT_ROOT="$(pwd)"
+PYTHON_PATH="/usr/bin/env python3"
+
+echo "🚀 WordPress自動投稿システム VPSセットアップ開始"
+echo "=================================================="
+
+# システム情報表示
+print_info "システム情報:"
+echo "  OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2 2>/dev/null || echo 'Unknown')"
+echo "  Python: $(python3 --version)"
+echo "  Git: $(git --version)"
+echo "  現在位置: $PROJECT_ROOT"
+echo ""
 
 # 必要ディレクトリの作成
-echo "必要ディレクトリを作成中..."
-mkdir -p "$PROJECT_ROOT"/{data/schedule,locks,logs/{daily,error},scripts}
+print_info "必要なディレクトリを作成中..."
+mkdir -p logs data backups
 
-# 権限設定
-echo "権限設定中..."
-chmod 755 "$PROJECT_ROOT"
-chmod 755 "$PROJECT_ROOT/logs" "$PROJECT_ROOT/data" "$PROJECT_ROOT/scripts"
-chmod 700 "$PROJECT_ROOT/locks"  # ロックファイル用は厳格に
+print_status "ディレクトリ作成完了"
 
-# 暗号化キーファイルの権限設定（存在する場合）
-if [ -f "$PROJECT_ROOT/.encryption_key" ]; then
-    chmod 600 "$PROJECT_ROOT/.encryption_key"
-    echo "✅ 暗号化キーファイルの権限を設定しました"
-fi
-
-# 環境変数設定ファイルの作成
-ENV_FILE="$PROJECT_ROOT/.vps_env"
-cat > "$ENV_FILE" << EOF
-# VPS環境変数設定
-export BLOG_AUTOMATION_ROOT="$PROJECT_ROOT"
-export VPS_MODE="true"
-export PYTHON_PATH="$PYTHON_PATH"
-EOF
-
-chmod 644 "$ENV_FILE"
-
-# Python環境チェック
-echo "Python環境をチェック中..."
-if command -v python3 &> /dev/null; then
-    PYTHON_VERSION=$(python3 --version)
-    echo "✅ Python環境: $PYTHON_VERSION"
+# Python仮想環境作成
+print_info "Python仮想環境をセットアップ中..."
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+    print_status "仮想環境作成完了"
 else
-    echo "❌ Python3が見つかりません"
-    exit 1
+    print_info "仮想環境は既に存在します"
 fi
 
-# 仮想環境チェック
-if [ -d "$PROJECT_ROOT/venv" ]; then
-    echo "✅ Python仮想環境が存在します"
-else
-    echo "⚠️ Python仮想環境が見つかりません"
-    echo "以下のコマンドで仮想環境を作成してください:"
-    echo "  cd $PROJECT_ROOT"
-    echo "  python3 -m venv venv"
-    echo "  source venv/bin/activate"
-    echo "  pip install -r requirements.txt"
-fi
+# 仮想環境有効化
+source venv/bin/activate
+print_status "仮想環境有効化完了"
 
-# 設定ファイルチェック
-CONFIG_FILE="$PROJECT_ROOT/config/config.vps.ini"
-if [ -f "$CONFIG_FILE" ]; then
-    echo "✅ VPS設定ファイルが存在します"
-else
-    echo "❌ VPS設定ファイルが見つかりません: $CONFIG_FILE"
-    exit 1
-fi
+# 依存関係インストール
+print_info "Python依存関係をインストール中..."
+pip install --upgrade pip
+pip install -r requirements.txt
+print_status "依存関係インストール完了"
 
-# ディスク容量チェック
-DISK_USAGE=$(df "$PROJECT_ROOT" | awk 'NR==2 {gsub(/%/, "", $5); print $5}')
-echo "現在のディスク使用率: ${DISK_USAGE}%"
+# 実行権限付与
+print_info "実行権限を設定中..."
+chmod +x main.py
+chmod +x execute_scheduled_posts.py
+chmod +x scripts/wordpress_auth_diagnostic.py
+print_status "実行権限設定完了"
 
-if [ "$DISK_USAGE" -gt 80 ]; then
-    echo "⚠️ ディスク使用率が高いです (${DISK_USAGE}%)"
-else
-    echo "✅ ディスク容量は十分です"
-fi
-
-# ネットワーク接続テスト
-echo "ネットワーク接続をテスト中..."
-if ping -c 1 google.com &> /dev/null; then
-    echo "✅ インターネット接続: OK"
-else
-    echo "❌ インターネット接続: NG"
-    exit 1
-fi
-
-# 各種スクリプトに実行権限付与
-echo "スクリプトに実行権限を付与中..."
-for script in "$PROJECT_ROOT"/scripts/*.sh "$PROJECT_ROOT"/*.py; do
-    if [ -f "$script" ]; then
-        chmod +x "$script"
-        echo "✅ 実行権限付与: $(basename "$script")"
+# .envファイル確認
+print_info ".envファイルを確認中..."
+if [ ! -f ".env" ]; then
+    if [ -f ".env.example" ]; then
+        cp .env.example .env
+        print_info ".env.example から .env を作成しました"
+        echo ""
+        print_error "重要: .envファイルに実際のAPI情報を設定してください"
+        echo "編集コマンド: nano .env"
+        echo ""
+    else
+        print_error ".env.example ファイルが見つかりません"
+        exit 1
     fi
-done
+else
+    print_status ".envファイル確認済み"
+fi
 
-# ログファイル初期化
-echo "ログファイルを初期化中..."
-touch "$PROJECT_ROOT/logs/cron.log"
-echo "$(date '+%Y-%m-%d %H:%M:%S') - VPS初期セットアップ完了" >> "$PROJECT_ROOT/logs/cron.log"
+# .envファイル権限設定
+chmod 600 .env
+print_status ".envファイル権限設定完了 (600)"
 
-# 環境確認サマリー
+# 接続テスト準備
+print_info "システム接続テストの準備完了"
 echo ""
-echo "=== セットアップ完了サマリー ==="
-echo "プロジェクトルート: $PROJECT_ROOT"
-echo "Python実行パス: $PYTHON_PATH"
-echo "ディスク使用率: ${DISK_USAGE}%"
-
-# 作成されたディレクトリ構造表示
+echo "次のステップ:"
+echo "1. .envファイルに実際のAPI情報を設定"
+echo "   nano .env"
 echo ""
-echo "作成されたディレクトリ構造:"
-tree "$PROJECT_ROOT" -L 3 2>/dev/null || find "$PROJECT_ROOT" -type d | head -20
-
-echo ""
-echo "=== 次の手順 ==="
-echo "1. WordPress認証設定:"
-echo "   - WordPress管理画面でアプリケーションパスワードを生成"
-echo "   - config/config.vps.ini のパスワードを更新"
-echo ""
-echo "2. 認証テスト実行:"
-echo "   cd $PROJECT_ROOT"
-echo "   source venv/bin/activate"
-echo "   python scripts/wordpress_auth_diagnostic.py"
-echo ""
-echo "3. cron設定:"
-echo "   ./scripts/setup_cron.sh"
-echo ""
-echo "4. システム稼働開始:"
+echo "2. 接続テスト実行"
 echo "   python main.py --vps-mode --test-connections"
 echo ""
-echo "✅ VPS初期セットアップが完了しました！"
+echo "3. WordPress認証診断"
+echo "   python scripts/wordpress_auth_diagnostic.py"
+echo ""
+echo "4. cron設定"
+echo "   crontab -e"
+echo ""
+
+# cron設定例を表示
+print_info "cron設定例（実際のパスに修正してください）:"
+echo "現在のパス: $PROJECT_ROOT"
+echo ""
+echo "crontab -e で以下を追加:"
+echo "# 15分間隔で自動投稿実行"
+echo "*/15 * * * * $PROJECT_ROOT/venv/bin/python $PROJECT_ROOT/execute_scheduled_posts.py --vps-mode --multiple 3 >> $PROJECT_ROOT/logs/cron.log 2>&1"
+echo ""
+echo "# 毎日0時にシステム状況確認"
+echo "0 0 * * * $PROJECT_ROOT/venv/bin/python $PROJECT_ROOT/execute_scheduled_posts.py --vps-mode --status >> $PROJECT_ROOT/logs/daily_status.log 2>&1"
+echo ""
+echo "# 毎週日曜日3時にGit更新"
+echo "0 3 * * 0 cd $PROJECT_ROOT && git pull origin main >> $PROJECT_ROOT/logs/git_update.log 2>&1"
+echo ""
+
+print_status "VPSセットアップ完了！"
+echo "=================================================="

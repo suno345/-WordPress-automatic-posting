@@ -1,0 +1,61 @@
+# WordPress自動投稿システム cron設定テンプレート
+# VPSでの15分間隔実行設定
+# 
+# 使用方法:
+# 1. 以下の YOUR_PROJECT_PATH を実際のパスに置き換え
+# 2. crontab -e でエディタを開く
+# 3. 以下の内容を貼り付け
+# 4. 保存して終了
+
+# ===== 基本設定 =====
+# 環境変数設定
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# ===== メイン実行 =====
+# 15分間隔で自動投稿実行（毎日96回）
+*/15 * * * * YOUR_PROJECT_PATH/venv/bin/python YOUR_PROJECT_PATH/execute_scheduled_posts.py --vps-mode --multiple 3 >> YOUR_PROJECT_PATH/logs/cron.log 2>&1
+
+# ===== 監視・メンテナンス =====
+# 毎日0時にシステム状況をログ出力
+0 0 * * * YOUR_PROJECT_PATH/venv/bin/python YOUR_PROJECT_PATH/execute_scheduled_posts.py --vps-mode --status >> YOUR_PROJECT_PATH/logs/daily_status.log 2>&1
+
+# 毎週日曜日3時にGitプル（自動更新）
+0 3 * * 0 cd YOUR_PROJECT_PATH && git pull origin main >> YOUR_PROJECT_PATH/logs/git_update.log 2>&1
+
+# 毎月1日2時にデータベースバックアップ
+0 2 1 * * cp YOUR_PROJECT_PATH/data/posts.db YOUR_PROJECT_PATH/backups/posts_$(date +\%Y\%m\%d).db 2>> YOUR_PROJECT_PATH/logs/backup.log
+
+# ===== ログローテーション =====
+# 毎日4時に古いログファイルを削除（30日以上）
+0 4 * * * find YOUR_PROJECT_PATH/logs -name "*.log" -mtime +30 -delete
+
+# 毎日5時に古いバックアップファイルを削除（90日以上）
+0 5 * * * find YOUR_PROJECT_PATH/backups -name "posts_*.db" -mtime +90 -delete
+
+# ===== エラー監視 =====
+# 毎時0分にエラーログチェック（エラーがあればメール通知）
+# 0 * * * * grep -i "error\|failed\|exception" YOUR_PROJECT_PATH/logs/cron.log | tail -20 | mail -s "Auto Posting System Errors" your-email@example.com
+
+# ===== パフォーマンス監視 =====
+# 毎日6時にディスク使用量チェック
+# 0 6 * * * df -h YOUR_PROJECT_PATH | mail -s "Disk Usage Report" your-email@example.com
+
+# ===== 設定例詳細 =====
+#
+# cron実行頻度の説明:
+# */15 * * * * → 15分間隔（1日96回）
+# */5 * * * *  → 5分間隔（1日288回）
+# */30 * * * * → 30分間隔（1日48回）
+#
+# ログ出力オプション:
+# >> ファイル名 2>&1  → 標準出力と標準エラーの両方をファイルに追記
+# > ファイル名 2>&1   → 標準出力と標準エラーの両方をファイルに上書き
+# 2>/dev/null        → エラー出力を破棄
+#
+# 実際の設定例（パス置き換え済み）:
+# /home/ubuntu/doujin-blog-automation の場合
+#
+# */15 * * * * /home/ubuntu/doujin-blog-automation/venv/bin/python /home/ubuntu/doujin-blog-automation/execute_scheduled_posts.py --vps-mode --multiple 3 >> /home/ubuntu/doujin-blog-automation/logs/cron.log 2>&1
+# 0 0 * * * /home/ubuntu/doujin-blog-automation/venv/bin/python /home/ubuntu/doujin-blog-automation/execute_scheduled_posts.py --vps-mode --status >> /home/ubuntu/doujin-blog-automation/logs/daily_status.log 2>&1
+# 0 3 * * 0 cd /home/ubuntu/doujin-blog-automation && git pull origin main >> /home/ubuntu/doujin-blog-automation/logs/git_update.log 2>&1
