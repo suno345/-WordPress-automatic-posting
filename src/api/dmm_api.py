@@ -206,14 +206,24 @@ class DMMAPIClient(SessionMixin):
                 logger.info(f"ジャンル情報をキャッシュから復元: 男性向け{len(self.male_genre_ids)}件, 女性向け{len(self.female_genre_ids)}件")
                 return True
             
+            logger.info("ジャンル情報がキャッシュにないため、GenreSearch APIから取得開始")
+            
             # キャッシュにない場合はGenreSearch APIから取得
             genre_data = self._fetch_genre_list()
             if not genre_data:
                 logger.warning("ジャンル情報の取得に失敗しました")
+                # フォールバック: デフォルトの男性向けジャンルIDを設定
+                logger.info("フォールバック: デフォルト男性向けジャンルIDを設定")
+                self.male_genre_ids.add("101")  # 一般的な同人コミックID
                 return False
             
             # ジャンル情報を分析してキャッシュに保存
             self._analyze_and_cache_genres(genre_data)
+            
+            # 男性向けジャンルが見つからない場合のフォールバック
+            if not self.male_genre_ids:
+                logger.warning("男性向けジャンルが検出されませんでした。デフォルトIDを追加")
+                self.male_genre_ids.add("101")  # デフォルトの男性向けジャンルID
             
             # 多層キャッシュに保存（24時間有効）
             self.cache_manager.set("genre_data", self.genre_cache, "dmm_api", ttl_hours=24)
@@ -229,21 +239,31 @@ class DMMAPIClient(SessionMixin):
     
     def _fetch_genre_list(self) -> List[Dict]:
         """GenreSearch APIでジャンル一覧を取得"""
+        # affiliate_idが空の場合は除外
         params = {
             'api_id': self.api_id,
-            'affiliate_id': self.affiliate_id,
-            'floor_id': '81',  # digital_doujin
+            'floor_id': '81',  # digital_doujin フロア
             'hits': 500,
             'output': 'json'
         }
         
+        if self.affiliate_id:
+            params['affiliate_id'] = self.affiliate_id
+        
         try:
+            logger.info(f"GenreSearch API request with params: {params}")
             response = self.session.get(f"{self.api_base_url}/GenreSearch", params=params)
             response.raise_for_status()
             data = response.json()
             
-            if data.get('result', {}).get('status', 0) == 200:
-                return data.get('result', {}).get('genre', [])
+            logger.info(f"GenreSearch API response status: {data.get('result', {}).get('status', 'unknown')}")
+            logger.debug(f"GenreSearch API full response: {data}")
+            
+            status = data.get('result', {}).get('status', 0)
+            if status == 200 or status == '200':
+                genres = data.get('result', {}).get('genre', [])
+                logger.info(f"GenreSearch API returned {len(genres)} genres")
+                return genres
             else:
                 logger.error(f"GenreSearch API error: {data}")
                 return []
@@ -254,16 +274,27 @@ class DMMAPIClient(SessionMixin):
     
     def _analyze_and_cache_genres(self, genre_data: List[Dict]) -> None:
         """ジャンル情報を分析してキャッシュに保存"""
+        logger.info(f"Analyzing {len(genre_data)} genres for male/female classification")
+        
         # 女性向けジャンルのキーワード
         female_keywords = [
             '女性向け', 'BL', 'ボーイズラブ', '乙女', 'TL', 'ティーンズラブ',
             '少女', 'レディース', '恋愛', 'ラブロマンス', '腐女子'
         ]
         
-        # 男性向けジャンルのキーワード
+        # 男性向けジャンルのキーワード（拡張版）
         male_keywords = [
             '男性向け', '成人向け', 'アダルト', 'エロ', '青年向け',
-            '大人向け', 'R18', '18禁', 'エッチ', 'Hな'
+            '大人向け', 'R18', '18禁', 'エッチ', 'Hな', 'セックス',
+            'オナニー', 'フェラ', 'パイズリ', 'バック', '中出し',
+            'ロリ', '巨乳', '美少女', 'JK', '人妻', 'メイド',
+            '学園', 'ハーレム', 'NTR', '寝取り', '調教', '凌辱'
+        ]
+        
+        # デフォルト男性向けジャンル（明確な女性向けキーワードがない場合）
+        default_male_genres = [
+            'コミック', 'マンガ', '漫画', 'CG', 'イラスト', 'アニメ',
+            'ゲーム', 'ノベル', '3D', 'フルカラー', 'モノクロ'
         ]
         
         for genre in genre_data:
@@ -277,15 +308,22 @@ class DMMAPIClient(SessionMixin):
                 'list_url': genre.get('list_url', '')
             }
             
-            # 女性向け判定
+            # 女性向け判定（優先）
             if any(keyword in genre_name for keyword in female_keywords):
                 self.female_genre_ids.add(genre_id)
                 logger.debug(f"女性向けジャンル登録: {genre_name} (ID: {genre_id})")
             
-            # 男性向け判定
+            # 男性向け判定（明示的キーワード）
             elif any(keyword in genre_name for keyword in male_keywords):
                 self.male_genre_ids.add(genre_id)
                 logger.debug(f"男性向けジャンル登録: {genre_name} (ID: {genre_id})")
+            
+            # デフォルト男性向け判定（女性向けキーワードがない場合）
+            elif any(keyword in genre_name for keyword in default_male_genres):
+                self.male_genre_ids.add(genre_id)
+                logger.debug(f"デフォルト男性向けジャンル登録: {genre_name} (ID: {genre_id})")
+        
+        logger.info(f"Genre analysis complete: 男性向け={len(self.male_genre_ids)}, 女性向け={len(self.female_genre_ids)}")
     
     def get_male_genre_ids(self) -> List[str]:
         """男性向けジャンルIDのリストを取得"""
