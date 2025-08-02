@@ -255,9 +255,15 @@ class WordPressAPI(SessionMixin):
             アップロード結果の辞書、失敗時はNone
         """
         try:
+            logger.info(f"Downloading image from: {image_url}")
+            
             # 画像をダウンロード
             image_response = self.session.get(image_url, timeout=Constants.API_TIMEOUT)
             image_response.raise_for_status()
+            
+            # Content-Typeを取得
+            content_type = image_response.headers.get('content-type', 'image/jpeg')
+            logger.info(f"Downloaded image: size={len(image_response.content)} bytes, content-type={content_type}")
             
             # ファイルサイズチェック（例：10MB制限）
             content_length = len(image_response.content)
@@ -265,25 +271,54 @@ class WordPressAPI(SessionMixin):
                 logger.warning(f"Image too large: {content_length} bytes")
                 return None
             
+            # ファイル名を安全にする（特殊文字除去）
+            import re
+            safe_filename = re.sub(r'[^\w\-_.]', '_', filename)
+            logger.info(f"Using safe filename: {safe_filename}")
+            
             # WordPressにアップロード
             files = {
-                'file': (filename, image_response.content, 'image/jpeg')
+                'file': (safe_filename, image_response.content, content_type)
             }
             
-            upload_response = self.session.post(f"{self.api_url}/media", files=files)
+            logger.info(f"Uploading to WordPress: {self.api_url}/media")
+            
+            # ファイルアップロード時はContent-Typeヘッダーを一時的に削除
+            # （requestsが自動的にmultipart/form-dataを設定するため）
+            original_content_type = self.session.headers.get('Content-Type')
+            if 'Content-Type' in self.session.headers:
+                del self.session.headers['Content-Type']
+                logger.info("Temporarily removed Content-Type header for file upload")
+            
+            try:
+                upload_response = self.session.post(f"{self.api_url}/media", files=files)
+            finally:
+                # Content-Typeヘッダーを復元
+                if original_content_type:
+                    self.session.headers['Content-Type'] = original_content_type
+                    logger.info("Restored Content-Type header")
             
             if upload_response.status_code == 201:
                 media_data = upload_response.json()
-                logger.info(f"Successfully uploaded media: {filename}")
+                logger.info(f"Successfully uploaded media: {safe_filename} (ID: {media_data['id']})")
                 return {
                     'id': media_data['id'],
                     'url': media_data['source_url']
                 }
             else:
-                logger.error(f"Failed to upload media: {upload_response.status_code}")
-            
+                logger.error(f"Failed to upload media: HTTP {upload_response.status_code}")
+                logger.error(f"Response body: {upload_response.text[:500]}")
+                
+                # 権限エラーの場合の詳細情報
+                if upload_response.status_code == 401:
+                    logger.error("Authentication failed - check WordPress credentials")
+                elif upload_response.status_code == 403:
+                    logger.error("Permission denied - user may not have media upload privileges")
+                
         except Exception as e:
-            logger.error(f"Error uploading media: {e}")
+            logger.error(f"Error uploading media from {image_url}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
         
         return None
     
