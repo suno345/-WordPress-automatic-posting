@@ -334,7 +334,7 @@ class AutoPostingSystem:
             tag_ids = self._get_tag_ids(post_data['tags'])
             
             # 投稿時刻の計算
-            post_time = tomorrow + timedelta(minutes=self.config.system.post_interval * posted_count)
+            post_time = tomorrow + timedelta(seconds=self.config.system.post_interval * posted_count)
             
             # WordPress投稿
             post_id = self._create_wordpress_post(post_data, category_ids, tag_ids, post_time)

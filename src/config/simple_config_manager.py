@@ -80,6 +80,10 @@ class SimpleConfigManager:
         
         # VPS最適化設定（VPSモード時のみ）
         if self._config_data['system']['vps_mode']:
+            # VPSモードでは1件制限を厳格に適用
+            self._config_data['system']['max_posts_per_run'] = 1
+            self._config_data['system']['search_limit'] = 50  # メモリ負荷軽減
+            
             self._config_data['vps_optimization'] = {
                 'cache_ttl': int(os.getenv('CACHE_TTL', '3600')),
                 'max_workers': int(os.getenv('MAX_WORKERS', '2')),

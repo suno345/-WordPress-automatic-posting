@@ -13,11 +13,11 @@ class Constants:
     API_TIMEOUT: Final[int] = 30
     MAX_RETRIES: Final[int] = 3
     
-    # 投稿関連
+    # 投稿関連  
     MAX_POSTS_PER_RUN: Final[int] = 1
-    SEARCH_LIMIT: Final[int] = 100
-    MAX_ADDITIONAL_SEARCHES: Final[int] = 10
-    ADDITIONAL_SEARCH_BATCH_SIZE: Final[int] = 50
+    SEARCH_LIMIT: Final[int] = 50  # 1回の検索件数を削減（メモリ負荷軽減）
+    MAX_ADDITIONAL_SEARCHES: Final[int] = 3  # 追加検索回数を削減
+    ADDITIONAL_SEARCH_BATCH_SIZE: Final[int] = 30  # 追加検索バッチサイズを削減
     POST_INTERVAL_MINUTES: Final[int] = 15
     DEFAULT_TARGET_LENGTH: Final[int] = 180
     

@@ -117,6 +117,10 @@ def main():
             sys.exit(0 if success else 1)
         else:
             # 通常の投稿処理
+            vps_mode = os.getenv('VPS_MODE', 'false').lower() == 'true'
+            print(f"🚀 main.py実行開始 - VPSモード: {'有効' if vps_mode else '無効'}")
+            print(f"📊 処理予定: {system.config.system.max_posts_per_run}件")
+            
             success = system.run()
             sys.exit(0 if success else 1)
             
