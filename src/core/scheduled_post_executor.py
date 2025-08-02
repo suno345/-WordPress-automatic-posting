@@ -209,7 +209,7 @@ class ScheduledPostExecutor:
             }
     
     def _generate_article_title(self, work_data: Dict) -> str:
-        """記事タイトルを生成\"\"\"
+        """記事タイトルを生成"""
         work_title = work_data.get('title', '')
         
         # 作者・サークル名を取得
@@ -224,7 +224,7 @@ class ScheduledPostExecutor:
         return f"{work_title}【{creator_name}】"
     
     def _get_categories(self, work_data: Dict) -> List[str]:
-        """カテゴリを取得\"\"\"
+        """カテゴリを取得"""
         categories = ["同人"]  # デフォルトカテゴリ
         
         # ジャンル情報からカテゴリを追加
@@ -234,7 +234,7 @@ class ScheduledPostExecutor:
         return categories
     
     def _get_tags(self, work_data: Dict) -> List[str]:
-        """タグを取得\"\"\"
+        """タグを取得"""
         tags = []
         
         # 作者・サークル名をタグに追加
@@ -302,7 +302,7 @@ class ScheduledPostExecutor:
         return results
     
     def get_execution_status(self) -> Dict:
-        """実行システムの状況を取得\"\"\"
+        """実行システムの状況を取得"""
         schedule_status = self.schedule_manager.get_schedule_status()
         
         # 次の投稿予定時刻を計算
@@ -330,7 +330,7 @@ class ScheduledPostExecutor:
         }
     
     def _get_performance_metrics(self) -> Dict:
-        """パフォーマンスメトリクスを取得\"\"\"
+        """パフォーマンスメトリクスを取得"""
         # 実際の実装では、過去の実行ログから統計を計算
         return {
             "avg_execution_time": 45.0,  # 平均実行時間（秒）
@@ -340,7 +340,7 @@ class ScheduledPostExecutor:
         }
     
     def recover_failed_posts(self) -> Dict:
-        """失敗した投稿の回復処理\"\"\"
+        """失敗した投稿の回復処理"""
         logger.info("失敗投稿の回復処理開始")
         
         # 失敗投稿の再スケジュール
