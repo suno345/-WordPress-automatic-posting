@@ -40,12 +40,12 @@ class ScheduledPostExecutor:
         logger.info("予約投稿実行システム初期化完了")
     
     def execute_next_scheduled_post(self) -> Dict:
-        \"\"\"
+        """
         次の予約投稿を実行
         
         Returns:
             実行結果
-        \"\"\"
+        """
         execution_start = datetime.now()
         
         result = {
@@ -147,7 +147,7 @@ class ScheduledPostExecutor:
         return result
     
     def _execute_wordpress_post(self, article_data: Dict) -> Dict:
-        \"\"\"
+        """
         WordPress投稿を実行
         
         Args:
@@ -155,7 +155,7 @@ class ScheduledPostExecutor:
             
         Returns:
             投稿結果
-        \"\"\"
+        """
         work_data = article_data["work_data"]
         article_content = article_data["article_content"]
         
@@ -209,7 +209,7 @@ class ScheduledPostExecutor:
             }
     
     def _generate_article_title(self, work_data: Dict) -> str:
-        \"\"\"記事タイトルを生成\"\"\"
+        """記事タイトルを生成\"\"\"
         work_title = work_data.get('title', '')
         
         # 作者・サークル名を取得
@@ -224,7 +224,7 @@ class ScheduledPostExecutor:
         return f"{work_title}【{creator_name}】"
     
     def _get_categories(self, work_data: Dict) -> List[str]:
-        \"\"\"カテゴリを取得\"\"\"
+        """カテゴリを取得\"\"\"
         categories = ["同人"]  # デフォルトカテゴリ
         
         # ジャンル情報からカテゴリを追加
@@ -234,7 +234,7 @@ class ScheduledPostExecutor:
         return categories
     
     def _get_tags(self, work_data: Dict) -> List[str]:
-        \"\"\"タグを取得\"\"\"
+        """タグを取得\"\"\"
         tags = []
         
         # 作者・サークル名をタグに追加
@@ -250,15 +250,15 @@ class ScheduledPostExecutor:
         return tags[:10]  # 最大10個のタグ
     
     def execute_multiple_posts(self, max_posts: int = 5) -> Dict:
-        \"\"\"
-        複数の予約投稿を連続実行（遅延分の回復用）
+        """
+        複数の予約投稿を連続実行(遅延分の回復用)
         
         Args:
             max_posts: 最大実行数
             
         Returns:
             実行結果サマリー
-        \"\"\"
+        """
         logger.info(f"複数投稿実行開始 - 最大: {max_posts}件")
         
         results = {
@@ -302,7 +302,7 @@ class ScheduledPostExecutor:
         return results
     
     def get_execution_status(self) -> Dict:
-        \"\"\"実行システムの状況を取得\"\"\"
+        """実行システムの状況を取得\"\"\"
         schedule_status = self.schedule_manager.get_schedule_status()
         
         # 次の投稿予定時刻を計算
@@ -330,7 +330,7 @@ class ScheduledPostExecutor:
         }
     
     def _get_performance_metrics(self) -> Dict:
-        \"\"\"パフォーマンスメトリクスを取得\"\"\"
+        """パフォーマンスメトリクスを取得\"\"\"
         # 実際の実装では、過去の実行ログから統計を計算
         return {
             "avg_execution_time": 45.0,  # 平均実行時間（秒）
@@ -340,7 +340,7 @@ class ScheduledPostExecutor:
         }
     
     def recover_failed_posts(self) -> Dict:
-        \"\"\"失敗した投稿の回復処理\"\"\"
+        """失敗した投稿の回復処理\"\"\"
         logger.info("失敗投稿の回復処理開始")
         
         # 失敗投稿の再スケジュール
