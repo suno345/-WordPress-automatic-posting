@@ -80,13 +80,14 @@ def parse_arguments():
 
 def main():
     """メイン処理"""
+    import os  # osモジュールを関数の最初でimport
+    
     try:
         # コマンドライン引数の解析
         args = parse_arguments()
         
         # VPSモードの場合は環境変数を設定
         if args.vps_mode:
-            import os
             os.environ['VPS_MODE'] = 'true'
             print("VPSモード: .env設定を使用")
         
