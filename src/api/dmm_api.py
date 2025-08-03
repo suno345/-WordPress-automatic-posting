@@ -36,8 +36,8 @@ class DMMAPIClient(SessionMixin):
         
     
         
-    def get_items(self, limit: int = 20, offset: int = 1, use_genre_filter: bool = True) -> List[Dict]:
-        """商品一覧を取得（新着順の同人コミック・インテリジェントリトライ付き）"""
+    def get_items(self, limit: int = 20, offset: int = 1, use_genre_filter: bool = True, require_reviews: bool = True) -> List[Dict]:
+        """商品一覧を取得（新着順の同人コミック・インテリジェントリトライ付き・レビューチェック付き）"""
         attempt = 1
         last_error = None
         
@@ -58,18 +58,12 @@ class DMMAPIClient(SessionMixin):
                     'output': 'json'
                 }
                 
-                # 改善：GenreSearch APIで男性向けジャンルを特定して使用
+                # 改善：コミック作品に特化した検索を実行
                 if use_genre_filter:
-                    # 男性向けコミック作品に特化：ジャンル指定でフィルタ
-                    male_genre_ids = self.get_male_genre_ids()
-                    if male_genre_ids:
-                        # articleをgenreに変更して男性向けジャンルで絞り込み
-                        params['article'] = 'genre'
-                        params['article_id'] = male_genre_ids[0]  # 最初の男性向けジャンルIDを使用
-                        logger.debug(f"男性向けジャンルフィルター適用: {male_genre_ids[0]}")
-                    else:
-                        # ジャンルIDが取得できない場合は基本パラメータのみ使用
-                        logger.info("男性向けジャンルIDが取得できないため、基本検索を使用")
+                    # コミック作品のみを取得（articleとarticle_idの両方が必要）
+                    params['article'] = 'comic'
+                    params['article_id'] = 'comic'
+                    logger.debug("コミック作品フィルター適用: article=comic, article_id=comic")
                 
                 # affiliate_idが空の場合は除外
                 if not self.affiliate_id:
@@ -89,17 +83,34 @@ class DMMAPIClient(SessionMixin):
                     return []
                 
                 items = data.get('result', {}).get('items', [])
-                if 'article' in params and params['article'] == 'genre':
-                    logger.info(f"Retrieved {len(items)} items from DMM API (filtered by male genre: {params.get('article_id', 'unknown')})")
+                if 'article' in params and params['article'] == 'comic':
+                    logger.info(f"Retrieved {len(items)} comic items from DMM API (filtered by article=comic)")
                 else:
-                    logger.info(f"Retrieved {len(items)} comic items from DMM API (filtered by article_id=comic)")
+                    logger.info(f"Retrieved {len(items)} items from DMM API (basic search)")
                 
                 # デバッグ用：最初のアイテムの構造をログ出力
                 if items:
                     logger.info(f"First item type: {type(items[0])}")
                     logger.info(f"First item sample: {str(items[0])[:200]}...")
                 
-                return items
+                # フィルタリング処理
+                filtered_items = []
+                for item in items:
+                    # 基本条件: コミック作品かつ男性向け
+                    if self.is_comic_work(item) and self._is_male_oriented_work(item):
+                        # レビューチェックが必要な場合は追加でレビュー確認
+                        if require_reviews:
+                            if self._has_reviews(item):
+                                filtered_items.append(item)
+                        else:
+                            filtered_items.append(item)
+                
+                if require_reviews:
+                    logger.info(f"Filtered to {len(filtered_items)} male-oriented comic items with reviews")
+                else:
+                    logger.info(f"Filtered to {len(filtered_items)} male-oriented comic items")
+                
+                return filtered_items
                 
             except requests.exceptions.HTTPError as e:
                 logger.error(f"HTTP Error from DMM API: {e}")
@@ -441,18 +452,22 @@ class DMMAPIClient(SessionMixin):
                     return False
             else:
                 # review情報がAPIレスポンスにない場合
-                # VPSモード時は作品不足を防ぐためレビューなしでも許可
-                import os
-                vps_mode = os.getenv('VPS_MODE', 'false').lower() == 'true'
-                if vps_mode:
-                    logger.info(f"VPSモード: レビューなしでも許可 - {api_item.get('title', 'Unknown')}")
-                    return True
-                else:
-                    logger.info(f"No review data in API response: {api_item.get('title', 'Unknown')}")
-                    return False
+                logger.info(f"No review data in API response: {api_item.get('title', 'Unknown')}")
+                return False
             
         except Exception as e:
             logger.error(f"Error validating reviews for {api_item.get('title', 'Unknown')}: {e}")
+            return False
+    
+    def _has_reviews(self, api_item: Dict) -> bool:
+        """レビューの有無を簡易チェック"""
+        try:
+            if 'review' in api_item:
+                review_count = api_item['review'].get('count', 0)
+                return review_count > 0
+            return False
+        except Exception as e:
+            logger.warning(f"Error checking reviews for {api_item.get('title', 'Unknown')}: {e}")
             return False
     
     def _extract_sample_images(self, api_item: Dict) -> List[str]:
