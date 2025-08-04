@@ -253,7 +253,7 @@ class AutoPostingSystem:
     
     def _search_and_convert_works(self, limit: int, offset: int) -> List[Dict]:
         """指定した範囲でAPIを呼び出してコミック作品に変換"""
-        api_items = self.dmm_client.get_items(limit=limit, offset=offset, use_genre_filter=False)
+        api_items = self.dmm_client.get_items(limit=limit, offset=offset, use_genre_filter=True)
         
         if not api_items:
             return []
