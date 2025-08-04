@@ -58,12 +58,12 @@ class DMMAPIClient(SessionMixin):
                     'output': 'json'
                 }
                 
-                # 改善：コミック作品に特化した検索を実行
+                # 男性向けコミック作品に特化した検索を実行
                 if use_genre_filter:
-                    # コミック作品のみを取得（articleとarticle_idの両方が必要）
-                    params['article'] = 'comic'
-                    params['article_id'] = 'comic'
-                    logger.debug("コミック作品フィルター適用: article=comic, article_id=comic")
+                    # 男性向けコミック作品のみを取得
+                    params['media'] = 'comic'      # 作品形式：コミック
+                    params['section'] = 'mens'     # 男性向けセクション
+                    logger.debug("男性向けコミック作品フィルター適用: media=comic, section=mens")
                 
                 # affiliate_idが空の場合は除外
                 if not self.affiliate_id:
