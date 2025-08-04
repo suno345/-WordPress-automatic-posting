@@ -1,0 +1,97 @@
+# VPS定期実行・WordPress投稿状況確認コマンド集
+
+## 1. cron設定確認
+# crontabの設定内容を確認
+crontab -l
+
+# cron実行ログを確認（最新50行）
+tail -50 /home/member1/wordpress-auto-posting/logs/cron.log
+
+# cron実行ログをリアルタイム監視
+tail -f /home/member1/wordpress-auto-posting/logs/cron.log
+
+## 2. プロセス・実行状況確認
+# Pythonプロセスが実行中か確認
+ps aux | grep python | grep wordpress-auto-posting
+
+# システムの負荷状況確認
+top -n 1 | head -10
+
+# ディスク使用量確認
+df -h
+
+## 3. ログファイル確認
+# 日次ステータスログ確認（最新20行）
+tail -20 /home/member1/wordpress-auto-posting/logs/daily_status.log
+
+# エラーログ確認（もしあれば）
+find /home/member1/wordpress-auto-posting -name "*.log" -exec tail -10 {} \; -print
+
+# 実行履歴の詳細確認
+ls -la /home/member1/wordpress-auto-posting/logs/
+
+## 4. システム手動実行テスト
+# 手動でVPSモード実行（テスト用）
+cd /home/member1/wordpress-auto-posting && /home/member1/wordpress-auto-posting/venv/bin/python /home/member1/wordpress-auto-posting/main.py --vps-mode
+
+# ステータス確認実行
+cd /home/member1/wordpress-auto-posting && /home/member1/wordpress-auto-posting/venv/bin/python /home/member1/wordpress-auto-posting/main.py --status
+
+## 5. WordPress側確認
+# 投稿予約状況確認（データベース直接）
+mysql -u [username] -p[password] [database_name] -e "SELECT post_title, post_status, post_date, post_date_gmt FROM wp_posts WHERE post_status IN ('publish', 'future') ORDER BY post_date DESC LIMIT 10;"
+
+# WordPressログイン後に管理画面で確認すべき項目：
+# - 投稿 > 投稿一覧 > 予約済み
+# - 投稿 > 投稿一覧 > 公開済み（最新の投稿日時）
+
+## 6. 環境・設定確認
+# 仮想環境が正常か確認
+/home/member1/wordpress-auto-posting/venv/bin/python --version
+
+# 必要なパッケージがインストールされているか確認
+/home/member1/wordpress-auto-posting/venv/bin/pip list | grep -E "(requests|beautifulsoup4|python-wordpress-xmlrpc)"
+
+# 設定ファイルが存在するか確認
+ls -la /home/member1/wordpress-auto-posting/ | grep -E "\.(py|json|conf)$"
+
+## 7. ネットワーク・API接続確認
+# インターネット接続確認
+ping -c 3 google.com
+
+# WordPressサイトへの接続確認
+curl -I [WordPressサイトのURL]
+
+# DMM APIへの接続確認（テスト用）
+curl -I "https://api.dmm.com/affiliate/v3/ItemList"
+
+## 8. タイムゾーン・時刻確認
+# システム時刻確認
+date
+
+# タイムゾーン確認
+timedatectl
+
+# cron実行時間と現在時刻の照合
+echo "現在時刻: $(date)"
+echo "次のcron実行予定: $(crontab -l | head -1)"
+
+## 9. トラブルシューティング
+# 15分以内に実行されたログがあるか確認
+find /home/member1/wordpress-auto-posting/logs -name "*.log" -mmin -15 -ls
+
+# メモリ不足でプロセスが終了していないか確認
+dmesg | grep -i "killed process" | tail -5
+
+# 権限問題がないか確認
+ls -la /home/member1/wordpress-auto-posting/main.py
+ls -la /home/member1/wordpress-auto-posting/logs/
+
+## 10. 緊急時対応
+# cron再起動
+sudo service cron restart
+
+# 手動でログ確認してからcron設定再登録
+crontab -r  # 現在の設定を削除（注意！）
+# 設定ファイルから再登録する場合：
+# crontab /path/to/crontab_file

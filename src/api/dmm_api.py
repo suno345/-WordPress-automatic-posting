@@ -88,10 +88,6 @@ class DMMAPIClient(SessionMixin):
                 else:
                     logger.info(f"Retrieved {len(items)} items from DMM API (basic search)")
                 
-                # デバッグ用：最初のアイテムの構造をログ出力
-                if items:
-                    logger.info(f"First item type: {type(items[0])}")
-                    logger.info(f"First item sample: {str(items[0])[:200]}...")
                 
                 # フィルタリング処理
                 filtered_items = []
@@ -186,10 +182,14 @@ class DMMAPIClient(SessionMixin):
     
     def _is_male_oriented_work(self, api_item: Dict) -> bool:
         """男性向け作品かどうかを判定（ジャンルIDによる厳密なチェック）"""
-        # 作品のジャンルIDリストを取得
-        genre_list = api_item.get('genre', [])
+        title = api_item.get('title', 'unknown')
+        
+        # 作品のジャンルIDリストを取得（iteminfo.genre から取得）
+        genre_list = []
+        if 'iteminfo' in api_item and 'genre' in api_item['iteminfo']:
+            genre_list = api_item['iteminfo']['genre']
+        
         if not genre_list:
-            logger.debug(f"ジャンル情報なしのため除外: {api_item.get('title', 'unknown')}")
             return False
         
         # 作品のジャンルIDセット
@@ -200,11 +200,9 @@ class DMMAPIClient(SessionMixin):
                 work_genre_ids.add(str(genre_id))
         
         # 男性向けジャンルIDとの照合
-        if work_genre_ids & self.male_genre_ids:
-            logger.debug(f"男性向けジャンル一致: {api_item.get('title', 'unknown')}")
+        intersection = work_genre_ids & self.male_genre_ids
+        if intersection:
             return True
-        
-        logger.debug(f"男性向けジャンル不一致のため除外: {api_item.get('title', 'unknown')}")
         return False
     
     def initialize_genre_cache(self) -> bool:
