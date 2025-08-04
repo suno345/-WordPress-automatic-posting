@@ -166,7 +166,12 @@ class AutoPostingSystem:
             
             if not review_works:
                 self.logger.warning(f"検索範囲{current_offset}-{current_offset + batch_size - 1}: 作品が見つかりませんでした")
-                break
+                # レビュー付き作品がない場合も次の範囲を検索継続
+                current_offset += batch_size
+                if search_attempt < max_search_attempts:
+                    import time
+                    time.sleep(self.config.system.request_delay)
+                continue
             
             self.logger.info(f"検索範囲{current_offset}-{current_offset + batch_size - 1}: {len(review_works)}件のレビュー付き作品を発見")
             
