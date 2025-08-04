@@ -130,18 +130,18 @@ class AutoPostingSystem:
             raise AutoPostingError(f"実行中にエラーが発生しました: {e}")
     
     def _fetch_works(self) -> List[Dict]:
-        """作品データを取得（バッチ処理モード対応）"""
+        """作品データを取得（新着優先モード）"""
         self.logger.info("DMM API から作品リストを取得中...")
         
         all_unposted_works = []
-        # 前回の続きから検索開始
-        current_offset = self.offset_manager.get_next_offset()
+        # 新着優先：毎回1件目から検索開始
+        current_offset = 1
         batch_size = self.config.system.search_limit
         required_works = self.config.system.max_posts_per_run
         max_search_attempts = Constants.MAX_ADDITIONAL_SEARCHES + 1  # 初回 + 追加検索
         search_attempt = 0
         
-        self.logger.info(f"検索開始位置: {current_offset}件目から")
+        self.logger.info(f"新着優先検索: 1件目から順次検索開始")
         self.logger.info(f"目標: {required_works}件の未投稿作品を検索")
         
         # 未投稿作品が必要数に達するまで検索継続
@@ -171,22 +171,10 @@ class AutoPostingSystem:
                 # 新着優先モード：必要数（通常1件）に達したら即座に返す
                 if len(all_unposted_works) >= required_works:
                     result_works = all_unposted_works[:required_works]
-                    self.logger.info(f"🎯 新着優先: {len(result_works)}件取得（同じ範囲に{len(all_unposted_works)}件残存）")
-                    
-                    # 検索オフセットを進めない（同じ範囲を次回も検索）
-                    if len(all_unposted_works) > required_works:
-                        self.logger.info(f"📍 検索位置維持: {current_offset}件目から（残り{len(all_unposted_works) - required_works}件継続処理）")
-                    else:
-                        # この範囲の未投稿作品が尽きた場合のみオフセットを進める
-                        self.offset_manager.save_next_offset(current_offset, batch_size, len(all_unposted_works))
-                        self.logger.info(f"📍 検索位置更新: {current_offset + batch_size}件目へ移動")
-                    
+                    self.logger.info(f"🎯 新着優先: {len(result_works)}件取得（{current_offset}-{current_offset + batch_size - 1}件目の範囲から）")
                     return result_works
             else:
                 self.logger.info(f"⚠️ この範囲の作品はすべて投稿済み")
-                # この範囲が完全に投稿済みの場合、次の範囲に移動
-                self.offset_manager.save_next_offset(current_offset, batch_size, 0)
-                self.logger.info(f"📍 範囲完了により検索位置更新: {current_offset + batch_size}件目へ移動")
             
             # 次の検索範囲に移動
             current_offset += batch_size
