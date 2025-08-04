@@ -14,6 +14,7 @@ from ..api.wordpress_api import WordPressAPI
 from .article_generator import ArticleGenerator
 from .post_manager import PostManager
 from .search_offset_manager import SearchOffsetManager
+from .search_cache_manager import SearchCacheManager
 from ..utils.constants import Constants, ErrorMessages
 from ..services.exceptions import AutoPostingError, ConfigurationError
 from ..utils.utils import setup_logging
@@ -56,6 +57,9 @@ class AutoPostingSystem:
             
             # 検索オフセット管理
             self.offset_manager = SearchOffsetManager()
+            
+            # 検索キャッシュ管理
+            self.cache_manager = SearchCacheManager()
             
             self.logger.info("システム初期化完了")
             
@@ -130,8 +134,15 @@ class AutoPostingSystem:
             raise AutoPostingError(f"実行中にエラーが発生しました: {e}")
     
     def _fetch_works(self) -> List[Dict]:
-        """作品データを取得（新着優先モード）"""
-        self.logger.info("DMM API から作品リストを取得中...")
+        """作品データを取得（キャッシュ優先 + 新着優先モード）"""
+        # まずキャッシュをチェック
+        cached_work_ids = self.cache_manager.get_cached_work_ids()
+        if cached_work_ids:
+            self.logger.info(f"キャッシュから{len(cached_work_ids)}件の作品IDを発見")
+            return self._fetch_works_from_cache(cached_work_ids)
+        
+        # キャッシュにない場合は通常の検索
+        self.logger.info("キャッシュが空のため、DMM API から作品リストを検索中...")
         
         all_unposted_works = []
         # 新着優先：毎回1件目から検索開始
@@ -172,6 +183,13 @@ class AutoPostingSystem:
                 if len(all_unposted_works) >= required_works:
                     result_works = all_unposted_works[:required_works]
                     self.logger.info(f"🎯 新着優先: {len(result_works)}件取得（{current_offset}-{current_offset + batch_size - 1}件目の範囲から）")
+                    
+                    # 残りの作品IDをキャッシュに保存
+                    remaining_work_ids = [work['work_id'] for work in all_unposted_works[required_works:]]
+                    if remaining_work_ids:
+                        self.cache_manager.save_work_ids(remaining_work_ids)
+                        self.logger.info(f"💾 残り{len(remaining_work_ids)}件の作品IDをキャッシュに保存")
+                    
                     return result_works
             else:
                 self.logger.info(f"⚠️ この範囲の作品はすべて投稿済み")
@@ -187,6 +205,41 @@ class AutoPostingSystem:
         # 最終結果
         self.logger.info(f"最終的に{len(all_unposted_works)}件の未投稿作品を取得しました")
         return all_unposted_works
+    
+    def _fetch_works_from_cache(self, cached_work_ids: List[str]) -> List[Dict]:
+        """キャッシュされた作品IDから作品データを取得"""
+        required_works = self.config.system.max_posts_per_run
+        
+        # 必要数だけ取得
+        target_work_ids = cached_work_ids[:required_works]
+        self.logger.info(f"キャッシュから{len(target_work_ids)}件の作品を処理予定")
+        
+        # 1-100件目から検索して、キャッシュIDに一致する作品を抽出
+        try:
+            review_works = self._search_and_convert_works(limit=100, offset=1)
+            if not review_works:
+                self.logger.warning("1-100件目の検索で作品が見つかりませんでした")
+                return []
+            
+            # キャッシュIDに一致する作品のみを抽出
+            cached_works = []
+            for work in review_works:
+                if work['work_id'] in target_work_ids:
+                    cached_works.append(work)
+                    self.logger.info(f"キャッシュマッチ: {work.get('title', work['work_id'])}")
+            
+            if not cached_works:
+                self.logger.warning("キャッシュIDに一致する作品が見つかりませんでした。キャッシュをクリアします")
+                self.cache_manager.clear_cache()
+                return []
+            
+            return cached_works[:required_works]
+            
+        except Exception as e:
+            self.logger.error(f"キャッシュ作品取得エラー: {e}")
+            # エラー時はキャッシュをクリアして通常検索にフォールバック
+            self.cache_manager.clear_cache()
+            return []
     
     def _search_and_convert_works(self, limit: int, offset: int) -> List[Dict]:
         """指定した範囲でAPIを呼び出してコミック作品に変換"""
@@ -263,9 +316,12 @@ class AutoPostingSystem:
                 self.logger.info(f"今日の投稿枠満杯のため翌日振り分け: {len(articles)}件")
                 self.logger.info(f"翌日投稿予定時刻: {', '.join(schedule_info['slots_used'])}")
             
-            # 投稿済みとして記録
+            # 投稿済みとして記録 & キャッシュから削除
             for article in articles:
-                self.post_manager.mark_as_posted(article["work_data"]["work_id"])
+                work_id = article["work_data"]["work_id"]
+                self.post_manager.mark_as_posted(work_id)
+                # キャッシュからも削除
+                self.cache_manager.remove_work_id(work_id)
             
             return len(articles)
             
