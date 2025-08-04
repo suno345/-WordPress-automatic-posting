@@ -63,7 +63,7 @@ class DMMAPIClient(SessionMixin):
                     # 男性向けコミック作品のみを取得
                     params['media'] = 'comic'      # 作品形式：コミック
                     params['section'] = 'mens'     # 男性向けセクション
-                    logger.debug("男性向けコミック作品フィルター適用: media=comic, section=mens")
+                    logger.info("男性向けコミック作品フィルター適用: media=comic, section=mens")
                 
                 # affiliate_idが空の場合は除外
                 if not self.affiliate_id:
