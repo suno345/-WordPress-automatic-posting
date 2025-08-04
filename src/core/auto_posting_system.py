@@ -139,10 +139,15 @@ class AutoPostingSystem:
         cached_work_ids = self.cache_manager.get_cached_work_ids()
         if cached_work_ids:
             self.logger.info(f"キャッシュから{len(cached_work_ids)}件の作品IDを発見")
-            return self._fetch_works_from_cache(cached_work_ids)
+            cached_works = self._fetch_works_from_cache(cached_work_ids)
+            # キャッシュから有効な作品が取得できた場合はそれを返す
+            if cached_works:
+                return cached_works
+            # キャッシュから作品が取得できない場合は通常検索にフォールバック
+            self.logger.info("キャッシュから有効な作品が取得できないため、通常検索にフォールバック")
         
-        # キャッシュにない場合は通常の検索
-        self.logger.info("キャッシュが空のため、DMM API から作品リストを検索中...")
+        # キャッシュにない場合または取得失敗時は通常の検索
+        self.logger.info("DMM API から作品リストを検索中...")
         
         all_unposted_works = []
         # 新着優先：毎回1件目から検索開始
