@@ -185,19 +185,27 @@ class DMMAPIClient(SessionMixin):
         return True
     
     def _is_male_oriented_work(self, api_item: Dict) -> bool:
-        """男性向け作品かどうかを判定（GenreSearch使用時は簡素化）"""
-        # GenreSearch APIで既に男性向けジャンルでフィルタしている場合は、
-        # 明らかな女性向けキーワードのチェックのみ実行
-        
-        # タイトルから女性向けキーワードをチェック
-        title = api_item.get('title', '')
-        female_keywords = ['BL', 'ボーイズラブ', '乙女', '女性向け', 'TL']
-        if any(keyword in title for keyword in female_keywords):
-            logger.debug(f"女性向けキーワードを含むタイトルとして除外: {title}")
+        """男性向け作品かどうかを判定（ジャンルIDによる厳密なチェック）"""
+        # 作品のジャンルIDリストを取得
+        genre_list = api_item.get('genre', [])
+        if not genre_list:
+            logger.debug(f"ジャンル情報なしのため除外: {api_item.get('title', 'unknown')}")
             return False
         
-        # GenreSearch APIによる男性向けフィルタを信頼
-        return True
+        # 作品のジャンルIDセット
+        work_genre_ids = set()
+        for genre in genre_list:
+            genre_id = genre.get('id')
+            if genre_id:
+                work_genre_ids.add(str(genre_id))
+        
+        # 男性向けジャンルIDとの照合
+        if work_genre_ids & self.male_genre_ids:
+            logger.debug(f"男性向けジャンル一致: {api_item.get('title', 'unknown')}")
+            return True
+        
+        logger.debug(f"男性向けジャンル不一致のため除外: {api_item.get('title', 'unknown')}")
+        return False
     
     def initialize_genre_cache(self) -> bool:
         """ジャンル情報をキャッシュに読み込み（多層キャッシュ活用）"""
