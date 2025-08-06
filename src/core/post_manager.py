@@ -31,7 +31,10 @@ class PostManager:
         return set()
     
     def _save_posted_works(self):
-        """投稿済み作品IDを保存"""
+        """投稿済み作品IDを保存（強化版：保存確認付き）"""
+        import tempfile
+        import shutil
+        
         try:
             # ディレクトリが存在しない場合は作成
             os.makedirs(os.path.dirname(self.posted_works_file), exist_ok=True)
@@ -40,23 +43,83 @@ class PostManager:
                 'posted_work_ids': list(self.posted_works)
             }
             
-            with open(self.posted_works_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            # 一時ファイルに書き込んでから原子的に移動（安全な保存）
+            temp_file = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode='w', 
+                    encoding='utf-8', 
+                    suffix='.json.tmp',
+                    dir=os.path.dirname(self.posted_works_file),
+                    delete=False
+                ) as f:
+                    temp_file = f.name
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())  # ディスクに強制書き込み
                 
-            logger.info(f"Saved {len(self.posted_works)} posted work IDs")
-            
+                # 原子的な移動
+                shutil.move(temp_file, self.posted_works_file)
+                
+                # 保存確認：実際にファイルを読み直して内容を検証
+                self._verify_saved_data(data)
+                
+                logger.info(f"Saved {len(self.posted_works)} posted work IDs (verified)")
+                
+            except Exception as e:
+                # 一時ファイルのクリーンアップ
+                if temp_file and os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                    except:
+                        pass
+                raise
+                
         except Exception as e:
             logger.error(f"Error saving posted works: {e}")
+            logger.error(f"File path: {self.posted_works_file}")
+            logger.error(f"Current working directory: {os.getcwd()}")
+            logger.error(f"Data to save: {len(self.posted_works)} items")
+            raise RuntimeError(f"Critical: Failed to save posted works data: {e}")
+    
+    def _verify_saved_data(self, expected_data):
+        """保存されたデータの整合性を確認"""
+        try:
+            with open(self.posted_works_file, 'r', encoding='utf-8') as f:
+                saved_data = json.load(f)
+            
+            expected_ids = set(expected_data['posted_work_ids'])
+            saved_ids = set(saved_data.get('posted_work_ids', []))
+            
+            if expected_ids != saved_ids:
+                raise ValueError(f"Data verification failed: expected {len(expected_ids)} IDs, got {len(saved_ids)} IDs")
+                
+        except Exception as e:
+            raise RuntimeError(f"Data verification failed: {e}")
     
     def is_posted(self, work_id: str) -> bool:
         """作品が既に投稿済みかチェック"""
         return work_id in self.posted_works
     
     def mark_as_posted(self, work_id: str):
-        """作品を投稿済みとしてマーク"""
+        """作品を投稿済みとしてマーク（保存確認付き）"""
+        if work_id in self.posted_works:
+            logger.info(f"Work already marked as posted: {work_id}")
+            return
+            
+        # メモリ上で追加
         self.posted_works.add(work_id)
-        self._save_posted_works()
-        logger.info(f"Marked work as posted: {work_id}")
+        
+        try:
+            # ファイルに保存（検証付き）
+            self._save_posted_works()
+            logger.info(f"Marked work as posted: {work_id} (total: {len(self.posted_works)})")
+            
+        except Exception as e:
+            # 保存に失敗した場合はメモリからも削除して整合性を保つ
+            self.posted_works.discard(work_id)
+            logger.error(f"Failed to mark work as posted: {work_id} - {e}")
+            raise RuntimeError(f"Critical: Failed to save posted work {work_id}: {e}")
     
     def get_posted_count(self) -> int:
         """投稿済み作品数を取得"""
