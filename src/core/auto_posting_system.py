@@ -231,15 +231,22 @@ class AutoPostingSystem:
                 self.logger.warning("1-100件目の検索で作品が見つかりませんでした")
                 return []
             
-            # キャッシュIDに一致する作品のみを抽出
+            # キャッシュIDに一致する作品のみを抽出（投稿済みチェック付き）
             cached_works = []
             for work in review_works:
                 if work['work_id'] in target_work_ids:
+                    # 投稿済みチェックを必ず実行（重複投稿防止）
+                    if self.post_manager.is_posted(work['work_id']):
+                        self.logger.info(f"キャッシュ作品が既に投稿済み: {work.get('title', work['work_id'])}")
+                        # キャッシュからも削除
+                        self.cache_manager.remove_work_id(work['work_id'])
+                        continue
+                    
                     cached_works.append(work)
                     self.logger.info(f"キャッシュマッチ: {work.get('title', work['work_id'])}")
             
             if not cached_works:
-                self.logger.warning("キャッシュIDに一致する作品が見つかりませんでした。キャッシュをクリアします")
+                self.logger.warning("キャッシュIDに一致する未投稿作品が見つかりませんでした。キャッシュをクリアします")
                 self.cache_manager.clear_cache()
                 return []
             
@@ -395,7 +402,10 @@ class AutoPostingSystem:
             
             if post_id:
                 # 投稿成功
-                self.post_manager.mark_as_posted(work_data['work_id'])
+                work_id = work_data['work_id']
+                self.post_manager.mark_as_posted(work_id)
+                # 投稿済み作品をキャッシュからも削除（重複投稿防止）
+                self.cache_manager.remove_work_id(work_id)
                 self.logger.info(f"投稿完了: {post_data['title']} (予約: {post_time})")
                 return True
             else:
