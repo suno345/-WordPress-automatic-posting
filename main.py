@@ -75,6 +75,12 @@ def parse_arguments():
         help='投稿カウンターをリセット（次回投稿日時を今日に戻す）'
     )
     
+    parser.add_argument(
+        '--cleanup-duplicates',
+        action='store_true',
+        help='重複投稿スケジュールをクリーンアップ'
+    )
+    
     return parser.parse_args()
 
 
@@ -116,6 +122,19 @@ def main():
             else:
                 print("❌ 投稿カウンターのリセットに失敗しました")
             sys.exit(0 if success else 1)
+        elif args.cleanup_duplicates:
+            # 重複スケジュールクリーンアップ
+            from src.core.post_schedule_manager import PostScheduleManager
+            print("🧹 重複投稿スケジュールをクリーンアップしています...")
+            schedule_manager = PostScheduleManager()
+            cleanup_result = schedule_manager.clean_duplicate_schedules()
+            if cleanup_result["success"]:
+                print(f"✅ クリーンアップ完了: {cleanup_result['removed_count']}件削除")
+                if cleanup_result["duplicates_found"] > 0:
+                    print(f"📝 {cleanup_result['duplicates_found']}作品の重複を解消しました")
+            else:
+                print(f"❌ クリーンアップに失敗しました: {cleanup_result['message']}")
+            sys.exit(0 if cleanup_result["success"] else 1)
         else:
             # 通常の投稿処理
             vps_mode = os.getenv('VPS_MODE', 'false').lower() == 'true'

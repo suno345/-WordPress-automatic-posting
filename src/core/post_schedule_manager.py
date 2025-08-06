@@ -100,7 +100,7 @@ class PostScheduleManager:
     
     def create_advance_schedule(self, articles: List[Dict]) -> Dict:
         """
-        15分刻みスケジュール内での前倒し投稿予約
+        15分刻みスケジュール内での前倒し投稿予約（重複防止機能付き）
         
         Args:
             articles: 記事データのリスト
@@ -110,29 +110,51 @@ class PostScheduleManager:
         """
         now = datetime.now()
         
+        # 重複チェック：既にスケジュールされている作品を除外
+        filtered_articles = self._filter_duplicate_works(articles)
+        if len(filtered_articles) != len(articles):
+            logger.warning(f"重複チェック: {len(articles) - len(filtered_articles)}件の重複作品を除外しました")
+        
+        if not filtered_articles:
+            logger.warning("重複チェック後、スケジュール対象の作品がありません")
+            return {
+                "created_at": now.isoformat(),
+                "total_articles": 0,
+                "schedule_ids": [],
+                "type": "no_schedule",
+                "message": "重複により全作品がスキップされました"
+            }
+        
         # 今日の残り投稿可能数を確認
         remaining_slots = self._get_remaining_daily_slots()
         
         # 利用可能な15分刻み時刻を計算
-        available_slots = self._calculate_next_15min_slots(len(articles), remaining_slots)
+        available_slots = self._calculate_next_15min_slots(len(filtered_articles), remaining_slots)
         
         created_count = 0
         schedule_info = {
             "created_at": now.isoformat(),
-            "total_articles": len(articles),
+            "total_articles": len(filtered_articles),
             "schedule_ids": [],
             "type": "advance_schedule",
             "interval_minutes": 15,
             "slots_used": [],
-            "remaining_daily_slots": remaining_slots
+            "remaining_daily_slots": remaining_slots,
+            "filtered_count": len(articles) - len(filtered_articles)
         }
         
         if not available_slots:
             logger.warning("今日の投稿枠が満杯のため、翌日に振り分けます")
-            return self._schedule_for_tomorrow(articles, schedule_info)
+            return self._schedule_for_tomorrow(filtered_articles, schedule_info)
         
         # 各記事を利用可能な15分刻み時刻に割り当て
-        for i, (article, post_time) in enumerate(zip(articles, available_slots)):
+        for i, (article, post_time) in enumerate(zip(filtered_articles, available_slots)):
+            # 再度重複チェック（同時実行対策）
+            work_id = article.get("work_data", {}).get("work_id")
+            if self._is_work_already_scheduled(work_id):
+                logger.warning(f"同時実行による重複検出をスキップ: {work_id}")
+                continue
+                
             # スケジュールIDを生成
             schedule_id = f"advance_{post_time.strftime('%Y%m%d_%H%M')}_{uuid.uuid4().hex[:8]}"
             
@@ -227,11 +249,20 @@ class PostScheduleManager:
         return False
     
     def _schedule_for_tomorrow(self, articles: List[Dict], schedule_info: Dict) -> Dict:
-        """翌日への振り分けスケジュール作成"""
+        """翌日への振り分けスケジュール作成（重複防止機能付き）"""
         tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
         
+        # 翌日スケジュールでも重複チェック
+        filtered_articles = self._filter_duplicate_works(articles) if not hasattr(articles, '_already_filtered') else articles
+        
         created_count = 0
-        for i, article in enumerate(articles):
+        for i, article in enumerate(filtered_articles):
+            # 再度重複チェック（同時実行対策）
+            work_id = article.get("work_data", {}).get("work_id")
+            if self._is_work_already_scheduled(work_id):
+                logger.warning(f"翌日スケジュール時の重複検出をスキップ: {work_id}")
+                continue
+                
             post_time = tomorrow + timedelta(minutes=15 * i)
             
             # スケジュールIDを生成
@@ -266,7 +297,7 @@ class PostScheduleManager:
 
     def create_daily_schedule(self, articles: List[Dict], start_date: Optional[datetime] = None) -> Dict:
         """
-        1日分の投稿スケジュールを作成
+        1日分の投稿スケジュールを作成（重複防止機能付き）
         
         Args:
             articles: 記事データのリスト
@@ -280,15 +311,32 @@ class PostScheduleManager:
             start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             start_date += timedelta(days=1)
         
+        # 重複チェック：既にスケジュールされている作品を除外
+        filtered_articles = self._filter_duplicate_works(articles)
+        if len(filtered_articles) != len(articles):
+            logger.warning(f"重複チェック: {len(articles) - len(filtered_articles)}件の重複作品を除外しました")
+        
+        if not filtered_articles:
+            logger.warning("重複チェック後、スケジュール対象の作品がありません")
+            return {
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "created_at": datetime.now().isoformat(),
+                "total_articles": 0,
+                "schedule_ids": [],
+                "type": "no_schedule",
+                "message": "重複により全作品がスキップされました"
+            }
+        
         created_count = 0
         schedule_info = {
             "start_date": start_date.strftime("%Y-%m-%d"),
             "created_at": datetime.now().isoformat(),
-            "total_articles": len(articles),
-            "schedule_ids": []
+            "total_articles": len(filtered_articles),
+            "schedule_ids": [],
+            "filtered_count": len(articles) - len(filtered_articles)
         }
         
-        for i, article in enumerate(articles[:96]):  # 最大96件/日
+        for i, article in enumerate(filtered_articles[:96]):  # 最大96件/日
             post_time = start_date + timedelta(minutes=15 * i)
             
             # スケジュールIDを生成
@@ -623,6 +671,147 @@ class PostScheduleManager:
                 return candidate_time
         
         return None
+    
+    def _filter_duplicate_works(self, articles: List[Dict]) -> List[Dict]:
+        """
+        重複作品を除外したリストを返す
+        
+        Args:
+            articles: 記事データのリスト
+            
+        Returns:
+            重複が除外された記事データのリスト
+        """
+        filtered_articles = []
+        
+        for article in articles:
+            work_id = article.get("work_data", {}).get("work_id")
+            if not work_id:
+                logger.warning("work_idが見つからない記事をスキップします")
+                continue
+                
+            # 既にスケジュール済みかチェック
+            if self._is_work_already_scheduled(work_id):
+                logger.info(f"重複検出: {work_id} は既にスケジュール済みです")
+                continue
+                
+            # 完了済みかチェック
+            if self._is_work_already_completed(work_id):
+                logger.info(f"完了済み検出: {work_id} は既に投稿完了済みです")
+                continue
+                
+            filtered_articles.append(article)
+        
+        return filtered_articles
+    
+    def _is_work_already_scheduled(self, work_id: str) -> bool:
+        """
+        指定作品が既にスケジュールされているかチェック
+        
+        Args:
+            work_id: 作品ID
+            
+        Returns:
+            既にスケジュール済みの場合True
+        """
+        if not work_id:
+            return False
+            
+        for post_info in self.schedule_data.values():
+            if post_info["status"] in ["scheduled", "in_progress"]:
+                scheduled_work_id = post_info.get("article_data", {}).get("work_data", {}).get("work_id")
+                if scheduled_work_id == work_id:
+                    return True
+        return False
+    
+    def _is_work_already_completed(self, work_id: str) -> bool:
+        """
+        指定作品が既に投稿完了済みかチェック
+        
+        Args:
+            work_id: 作品ID
+            
+        Returns:
+            既に完了済みの場合True
+        """
+        if not work_id:
+            return False
+            
+        for post_info in self.completed_posts.values():
+            completed_work_id = post_info.get("article_data", {}).get("work_data", {}).get("work_id")
+            if completed_work_id == work_id:
+                return True
+        return False
+    
+    def clean_duplicate_schedules(self) -> Dict:
+        """
+        重複スケジュールをクリーンアップ
+        
+        Returns:
+            クリーンアップ結果の統計情報
+        """
+        try:
+            original_count = len(self.schedule_data)
+            work_id_to_schedules = {}
+            
+            # work_id別にスケジュールを分類
+            for schedule_id, post_info in self.schedule_data.items():
+                work_id = post_info.get("article_data", {}).get("work_data", {}).get("work_id")
+                if work_id:
+                    if work_id not in work_id_to_schedules:
+                        work_id_to_schedules[work_id] = []
+                    work_id_to_schedules[work_id].append((schedule_id, post_info))
+            
+            # 重複している作品を特定
+            duplicates_found = []
+            schedules_to_remove = []
+            
+            for work_id, schedules in work_id_to_schedules.items():
+                if len(schedules) > 1:
+                    # 最も古いスケジュールを残して他を削除
+                    schedules.sort(key=lambda x: datetime.fromisoformat(x[1]["created_at"]))
+                    keep_schedule = schedules[0]
+                    remove_schedules = schedules[1:]
+                    
+                    duplicates_found.append({
+                        "work_id": work_id,
+                        "total_schedules": len(schedules),
+                        "kept_schedule": keep_schedule[0],
+                        "removed_schedules": [s[0] for s in remove_schedules]
+                    })
+                    
+                    schedules_to_remove.extend([s[0] for s in remove_schedules])
+            
+            # 重複スケジュールを削除
+            for schedule_id in schedules_to_remove:
+                if schedule_id in self.schedule_data:
+                    del self.schedule_data[schedule_id]
+            
+            # 変更を保存
+            self._save_schedule()
+            
+            removed_count = len(schedules_to_remove)
+            final_count = len(self.schedule_data)
+            
+            logger.info(f"重複スケジュールクリーンアップ完了: {removed_count}件削除 ({original_count} → {final_count})")
+            
+            return {
+                "success": True,
+                "original_count": original_count,
+                "final_count": final_count,
+                "removed_count": removed_count,
+                "duplicates_found": len(duplicates_found),
+                "duplicate_details": duplicates_found,
+                "cleaned_at": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"重複スケジュールクリーンアップエラー: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "重複スケジュールクリーンアップに失敗しました"
+            }
     
     def reset_schedule_only(self) -> Dict:
         """
