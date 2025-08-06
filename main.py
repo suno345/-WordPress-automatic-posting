@@ -81,6 +81,12 @@ def parse_arguments():
         help='重複投稿スケジュールをクリーンアップ'
     )
     
+    parser.add_argument(
+        '--sync-from-vps',
+        action='store_true',
+        help='VPS環境から投稿済み作品データを同期'
+    )
+    
     return parser.parse_args()
 
 
@@ -135,6 +141,27 @@ def main():
             else:
                 print(f"❌ クリーンアップに失敗しました: {cleanup_result['message']}")
             sys.exit(0 if cleanup_result["success"] else 1)
+        elif args.sync_from_vps:
+            # VPS環境からデータ同期
+            import subprocess
+            print("🔄 VPS環境から投稿済み作品データを同期しています...")
+            try:
+                result = subprocess.run([
+                    "python", "sync_from_vps.py"
+                ], capture_output=True, text=True)
+                
+                print(result.stdout)
+                if result.stderr:
+                    print(result.stderr)
+                
+                if result.returncode == 0:
+                    print("✅ VPS環境からの同期が完了しました")
+                else:
+                    print("❌ VPS環境からの同期に失敗しました")
+                sys.exit(result.returncode)
+            except Exception as e:
+                print(f"❌ 同期処理中にエラーが発生: {e}")
+                sys.exit(1)
         else:
             # 通常の投稿処理
             vps_mode = os.getenv('VPS_MODE', 'false').lower() == 'true'
