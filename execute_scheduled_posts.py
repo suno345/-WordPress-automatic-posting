@@ -137,8 +137,17 @@ def main():
             password=wp_config.password
         )
         
-        # 投稿管理システムの初期化
-        post_manager = PostManager(config_manager)
+        # 投稿管理システムの初期化（正しいファイルパスで）
+        post_manager = PostManager()  # デフォルトパス（data/posted_works.json）を使用
+        
+        # デバッグ：PostManagerの状態を確認
+        logger.info(f"PostManager初期化完了: ファイルパス={post_manager.posted_works_file}")
+        logger.info(f"投稿済み作品数: {post_manager.get_posted_count()}件")
+        
+        # d_590748の投稿済み状況を確認（デバッグ用）
+        test_work_id = "d_590748"
+        is_posted = post_manager.is_posted(test_work_id)
+        logger.info(f"デバッグ: {test_work_id}の投稿済み判定: {'投稿済み' if is_posted else '未投稿'}")
         
         # 予約投稿実行システムの初期化
         executor = ScheduledPostExecutor(
