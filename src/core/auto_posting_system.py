@@ -135,18 +135,10 @@ class AutoPostingSystem:
     
     def _fetch_works(self) -> List[Dict]:
         """作品データを取得（キャッシュ優先 + 新着優先モード）"""
-        # まずキャッシュをチェック
-        cached_work_ids = self.cache_manager.get_cached_work_ids()
-        if cached_work_ids:
-            self.logger.info(f"キャッシュから{len(cached_work_ids)}件の作品IDを発見")
-            cached_works = self._fetch_works_from_cache(cached_work_ids)
-            # キャッシュから有効な作品が取得できた場合はそれを返す
-            if cached_works:
-                return cached_works
-            # キャッシュから作品が取得できない場合は通常検索にフォールバック
-            self.logger.info("キャッシュから有効な作品が取得できないため、通常検索にフォールバック")
+        # キャッシュシステムを無効化（重複投稿防止のため常にフレッシュ検索）
+        self.logger.info("キャッシュシステムは無効化されています - 常にフレッシュ検索を実行")
         
-        # キャッシュにない場合または取得失敗時は通常の検索
+        # 常に通常の検索を実行
         self.logger.info("DMM API から作品リストを検索中...")
         
         all_unposted_works = []
@@ -194,11 +186,10 @@ class AutoPostingSystem:
                     result_works = all_unposted_works[:required_works]
                     self.logger.info(f"🎯 新着優先: {len(result_works)}件取得（{current_offset}-{current_offset + batch_size - 1}件目の範囲から）")
                     
-                    # 残りの作品IDをキャッシュに保存
+                    # キャッシュ保存は無効化（重複投稿防止のため）
                     remaining_work_ids = [work['work_id'] for work in all_unposted_works[required_works:]]
                     if remaining_work_ids:
-                        self.cache_manager.save_work_ids(remaining_work_ids)
-                        self.logger.info(f"💾 残り{len(remaining_work_ids)}件の作品IDをキャッシュに保存")
+                        self.logger.info(f"🚫 キャッシュ無効化: 残り{len(remaining_work_ids)}件の作品IDは保存しません")
                     
                     return result_works
             else:
@@ -333,12 +324,11 @@ class AutoPostingSystem:
                 self.logger.info(f"今日の投稿枠満杯のため翌日振り分け: {len(articles)}件")
                 self.logger.info(f"翌日投稿予定時刻: {', '.join(schedule_info['slots_used'])}")
             
-            # 投稿済みとして記録 & キャッシュから削除
+            # 投稿済みとして記録
             for article in articles:
                 work_id = article["work_data"]["work_id"]
                 self.post_manager.mark_as_posted(work_id)
-                # キャッシュからも削除
-                self.cache_manager.remove_work_id(work_id)
+                # キャッシュシステム無効化のため削除処理不要
             
             return len(articles)
             
@@ -404,8 +394,7 @@ class AutoPostingSystem:
                 # 投稿成功
                 work_id = work_data['work_id']
                 self.post_manager.mark_as_posted(work_id)
-                # 投稿済み作品をキャッシュからも削除（重複投稿防止）
-                self.cache_manager.remove_work_id(work_id)
+                # キャッシュシステム無効化のため削除処理不要
                 self.logger.info(f"投稿完了: {post_data['title']} (予約: {post_time})")
                 return True
             else:

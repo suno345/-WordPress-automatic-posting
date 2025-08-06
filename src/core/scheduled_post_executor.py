@@ -7,7 +7,6 @@ from typing import Dict, List, Optional
 import time
 
 from .post_schedule_manager import PostScheduleManager
-from .search_cache_manager import SearchCacheManager
 from ..api.wordpress_api import WordPressAPI
 from ..core.post_manager import PostManager
 from ..services.exceptions import AutoPostingError
@@ -29,7 +28,6 @@ class ScheduledPostExecutor:
             post_manager: 投稿管理システム
         """
         self.wp_api = wp_api
-        self.search_cache_manager = SearchCacheManager()
         self.config = config
         self.post_manager = post_manager
         
@@ -108,8 +106,7 @@ class ScheduledPostExecutor:
                     try:
                         work_id = work_data["work_id"]
                         self.post_manager.mark_as_posted(work_id)
-                        # 投稿済み作品をキャッシュからも削除（重複投稿防止）
-                        self.search_cache_manager.remove_work_id(work_id)
+                        # キャッシュシステム無効化のため削除処理不要
                     except Exception as e:
                         logger.error(f"mark_as_posted でエラー: {e}")
                         logger.error(f"work_data: {work_data}")
